@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { webSpeech } from "../tts";
+import type { SpeakResult } from "../tts";
 import { Run, type RunState } from "./Run";
 
 vi.mock("../tts", () => ({
@@ -40,8 +41,8 @@ beforeEach(() => {
   // play by hand is what makes the pacing between plays observable.
   vi.mocked(webSpeech.speak).mockImplementation(
     () =>
-      new Promise<void>((resolve) => {
-        finishPlay = resolve;
+      new Promise<SpeakResult>((resolve) => {
+        finishPlay = () => resolve("finished");
       }),
   );
 });

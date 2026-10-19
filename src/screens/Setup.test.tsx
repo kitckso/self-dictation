@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { webSpeech } from "../tts";
 import { Setup } from "./Setup";
 
 vi.mock("../tts", () => ({
   isSupported: () => true,
-  webSpeech: { speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(), listVoices: vi.fn() },
+  webSpeech: {
+    speak: vi.fn().mockResolvedValue("finished"),
+    cancel: vi.fn(),
+    listVoices: vi.fn(),
+  },
 }));
 
 vi.mock("../storage/db", () => ({
@@ -80,5 +85,25 @@ describe("Setup", () => {
     renderSetup();
 
     expect(screen.queryByRole("button", { name: /share/i })).toBeNull();
+  });
+
+  it("says the voice played when it did", async () => {
+    renderSetup();
+
+    fireEvent.click(screen.getByRole("button", { name: /test this voice/i }));
+
+    expect(await screen.findByText(/finished playing/i)).toBeTruthy();
+  });
+
+  it("does not claim the voice played when the browser cut it short", async () => {
+    // Chrome stops speaking at around fifteen seconds without saying so, and
+    // "Finished playing." for a voice that never got going would be a lie.
+    vi.mocked(webSpeech.speak).mockResolvedValue("cut-off");
+    renderSetup();
+
+    fireEvent.click(screen.getByRole("button", { name: /test this voice/i }));
+
+    expect(await screen.findByText(/stopped before it had finished/i)).toBeTruthy();
+    expect(screen.queryByText(/finished playing/i)).toBeNull();
   });
 });

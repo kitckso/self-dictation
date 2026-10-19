@@ -1,4 +1,4 @@
-import type { SpeakOptions, TtsProvider, VoiceOption } from "./TtsProvider";
+import type { SpeakOptions, SpeakResult, TtsProvider, VoiceOption } from "./TtsProvider";
 
 /**
  * Web Speech (speechSynthesis) — free, offline, no key, no server.
@@ -175,14 +175,14 @@ class WebSpeechProvider implements TtsProvider {
     return (await getVoices()).length > 0;
   }
 
-  speak(text: string, options: SpeakOptions): Promise<void> {
+  speak(text: string, options: SpeakOptions): Promise<SpeakResult> {
     const s = synth();
-    if (!s) return Promise.resolve();
+    if (!s) return Promise.resolve("finished");
 
     this.cancel();
     this.stopped = false;
 
-    return new Promise<void>((resolve) => {
+    return new Promise<SpeakResult>((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = options.lang;
       // The platform clamps to [0.1, 10] itself; writing the range down says so
@@ -197,29 +197,31 @@ class WebSpeechProvider implements TtsProvider {
       });
 
       let settled = false;
-      const finish = () => {
+      const finish = (result: SpeakResult) => {
         if (settled) return;
         settled = true;
         this.clearTimers();
-        resolve();
+        resolve(result);
       };
 
-      utterance.onend = finish;
+      utterance.onend = () => finish("finished");
       utterance.onerror = (e) => {
         // Stopping playback on purpose is not a failure. The platform still
         // fires `error` with "canceled"/"interrupted", and reporting that as
         // a speech failure would be a lie the user has to see and dismiss.
         const benign = e.error === "canceled" || e.error === "interrupted";
         if (!benign && !this.stopped) options.onError?.(e.error || "speech-failed");
-        finish();
+        finish("finished");
       };
       if (options.onBoundary) {
         utterance.onboundary = (e) => options.onBoundary?.(e.charIndex);
       }
 
-      // Workaround (2): assume the worst and resolve either way.
+      // Workaround (2): assume the worst and resolve either way. The result
+      // says which happened, so a voice the platform cut short is not
+      // reported as one that worked.
       const estimate = Math.max(3000, (text.length / CHARS_PER_SECOND) * 1000);
-      const timers = [setTimeout(finish, estimate + WATCHDOG_MS)];
+      const timers = [setTimeout(() => finish("cut-off"), estimate + WATCHDOG_MS)];
 
       // Workaround (2): nudge Chrome so it doesn't hit its ~15s cutoff.
       // This MUST be skipped on Android — pause/resume is what breaks

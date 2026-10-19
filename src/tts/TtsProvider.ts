@@ -15,6 +15,15 @@ export interface SpeakOptions {
 }
 
 /**
+ * How a piece of speech ended.
+ *
+ * "finished" means the platform said the utterance was over. "cut-off" means
+ * it stopped without finishing — the words may not all have been spoken, and
+ * saying so is better than reporting a success that did not happen.
+ */
+export type SpeakResult = "finished" | "cut-off";
+
+/**
  * The seam between the app and whatever actually makes sound.
  *
  * Only Web Speech ships today. The seam exists because Web Speech has known
@@ -32,7 +41,12 @@ export interface TtsProvider {
    * from it there.
    */
   canEnumerateVoices(): Promise<boolean>;
-  /** Resolves when speech finishes, or when the provider gives up waiting. */
-  speak(text: string, options: SpeakOptions): Promise<void>;
+  /**
+   * Resolves when speech finishes, or when the provider gives up waiting.
+   *
+   * The result says which of the two happened, so a caller can tell a voice
+   * that worked from one the platform cut short.
+   */
+  speak(text: string, options: SpeakOptions): Promise<SpeakResult>;
   cancel(): void;
 }

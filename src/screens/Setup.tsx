@@ -76,7 +76,7 @@ export function Setup({
   const [title, setTitle] = useState(initial?.title ?? "");
   const [text, setText] = useState(initial?.text ?? "");
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [testState, setTestState] = useState<"idle" | "speaking" | "ok" | "failed">("idle");
+  const [testState, setTestState] = useState<"idle" | "speaking" | "ok" | "cut" | "failed">("idle");
   const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
@@ -99,7 +99,12 @@ export function Setup({
         lang: languageById(language).tags[0] ?? "en",
         onError: () => setTestState("failed"),
       })
-      .then(() => setTestState((s) => (s === "speaking" ? "ok" : s)));
+      .then((result) =>
+        // The browser can stop speaking without saying so — Chrome does it
+        // silently at around fifteen seconds. "Finished playing." for a voice
+        // that never got going would be a lie.
+        setTestState((s) => (s === "speaking" ? (result === "finished" ? "ok" : "cut") : s)),
+      );
   }
 
   const hasVoice = useMemo(() => hasVoiceFor(voices, language), [language, voices]);
@@ -184,6 +189,12 @@ export function Setup({
             {testState === "speaking" ? "Playing…" : "Test this voice"}
           </button>
           {testState === "ok" && <span className="note good">Finished playing.</span>}
+          {testState === "cut" && (
+            <span className="note bad">
+              The browser stopped before it had finished. That usually means the voice is listed but
+              not really installed — check the language pack, and try again.
+            </span>
+          )}
           {testState === "failed" && (
             <span className="note bad">
               The browser refused to speak. On Android, install the language pack in Settings →

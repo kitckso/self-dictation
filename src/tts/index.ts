@@ -1,2 +1,2 @@
 export { isAndroidLike, isSupported, pickVoice, webSpeech } from "./webSpeech";
-export type { SpeakOptions, TtsProvider, VoiceOption } from "./TtsProvider";
+export type { SpeakOptions, SpeakResult, TtsProvider, VoiceOption } from "./TtsProvider";

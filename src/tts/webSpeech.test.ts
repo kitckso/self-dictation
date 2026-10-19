@@ -155,3 +155,74 @@ describe("the voice list", () => {
     expect(await webSpeech.canEnumerateVoices()).toBe(false);
   });
 });
+
+/** The parts of an utterance the provider reaches for. */
+type FakeUtterance = {
+  onend: (() => void) | null;
+  onerror: ((e: unknown) => void) | null;
+  onboundary: ((e: unknown) => void) | null;
+};
+
+describe("speaking", () => {
+  /** The utterances the provider handed the platform. */
+  let utterances: FakeUtterance[];
+
+  beforeEach(() => {
+    utterances = [];
+    class FakeUtterance {
+      lang = "";
+      rate = 1;
+      voice: unknown = null;
+      onend: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      onboundary: ((e: unknown) => void) | null = null;
+      text: string;
+      constructor(text: string) {
+        this.text = text;
+        utterances.push(this);
+      }
+    }
+    Object.defineProperty(globalThis, "SpeechSynthesisUtterance", {
+      value: FakeUtterance,
+      configurable: true,
+    });
+  });
+
+  it("reports a voice that finished", async () => {
+    const webSpeech = await provider();
+
+    const speaking = webSpeech.speak("Hello", { lang: "en-GB" });
+    utterances[0]?.onend?.();
+
+    expect(await speaking).toBe("finished");
+  });
+
+  it("reports a voice the platform cut short", async () => {
+    vi.useFakeTimers();
+    try {
+      const webSpeech = await provider();
+
+      const speaking = webSpeech.speak("Hello", { lang: "en-GB" });
+      // The platform stops without a word, and the watchdog notices.
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(await speaking).toBe("cut-off");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is not cut off by the watchdog when the voice finishes first", async () => {
+    vi.useFakeTimers();
+    try {
+      const webSpeech = await provider();
+
+      const speaking = webSpeech.speak("Hello", { lang: "en-GB" });
+      utterances[0]?.onend?.();
+
+      expect(await speaking).toBe("finished");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
