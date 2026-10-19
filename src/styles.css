@@ -251,6 +251,12 @@ h2 {
   white-space: nowrap;
   font-size: 14px;
 }
+/* The question a ✕ asks before it takes a Run away, on its row. */
+.confirm-note {
+  font-size: 12px;
+  color: var(--bad);
+  white-space: nowrap;
+}
 
 /* ---------- run: layout B, one slot per Chunk ---------- */
 .run-scroll {

@@ -147,9 +147,26 @@ describe("History", () => {
     renderHistory();
 
     fireEvent.click(await screen.findByRole("button", { name: /Forget the run of Lesson 1/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^forget$/i }));
 
     expect(deleteRun).toHaveBeenCalledWith("r1");
     expect(await screen.findByText(/nothing yet/i)).toBeTruthy();
+  });
+
+  it("asks before forgetting a single Run", async () => {
+    // Forgetting a Run throws away the record of how they did, so the ✕ asks
+    // first rather than taking it away on a stray click.
+    vi.mocked(listAllRuns).mockResolvedValue([makeRun()]);
+    renderHistory();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Forget the run of Lesson 1/ }));
+
+    expect(screen.getByText(/forget this run/i)).toBeTruthy();
+    expect(deleteRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^keep$/i }));
+    expect(screen.queryByText(/forget this run/i)).toBeNull();
+    expect(deleteRun).not.toHaveBeenCalled();
   });
 
   it("forgets every Run at once", async () => {
@@ -157,9 +174,24 @@ describe("History", () => {
     renderHistory();
 
     fireEvent.click(await screen.findByRole("button", { name: /Forget every run/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Yes, forget every run/ }));
 
     expect(clearRuns).toHaveBeenCalled();
     expect(await screen.findByText(/nothing yet/i)).toBeTruthy();
+  });
+
+  it("asks before forgetting every Run", async () => {
+    vi.mocked(listAllRuns).mockResolvedValue([makeRun()]);
+    renderHistory();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Forget every run/i }));
+
+    expect(screen.getByText(/Yes, forget every run/)).toBeTruthy();
+    expect(clearRuns).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Keep them$/i }));
+    expect(screen.queryByText(/Yes, forget every run/)).toBeNull();
+    expect(clearRuns).not.toHaveBeenCalled();
   });
 
   it("sees every Run, not just the newest few", async () => {

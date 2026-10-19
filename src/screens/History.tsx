@@ -38,6 +38,19 @@ function ago(at: number, now: number): string {
   return new Date(at).toLocaleDateString();
 }
 
+/**
+ * What the person is being asked to confirm, or null.
+ *
+ * Forgetting a Run is permanent and undoes the record of how they did, so both
+ * the ✕ and "Forget every run" ask before they take anything away.
+ */
+type Confirming = { kind: "run"; id: string } | { kind: "all" } | null;
+
+/** Whether the row for this Run is currently being asked about forgetting. */
+function askingAboutRun(asking: Confirming, id: string): boolean {
+  return asking?.kind === "run" && asking.id === id;
+}
+
 /** The title for a drill over some material. */
 function drillTitle(language: string, count: number): string {
   return `Needs practice — ${language} (${count})`;
@@ -47,6 +60,7 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
   const [runs, setRuns] = useState<Run[] | null>(null);
   /** Whether the store could not be read at all. */
   const [unreadable, setUnreadable] = useState(false);
+  const [confirming, setConfirming] = useState<Confirming>(null);
 
   useEffect(() => {
     void listAllRuns()
@@ -180,13 +194,31 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
                     >
                       again
                     </button>
-                    <button
-                      className="rowbtn"
-                      onClick={() => void remove(run.id)}
-                      aria-label={`Forget the run of ${run.title}`}
-                    >
-                      ✕
-                    </button>
+                    {askingAboutRun(confirming, run.id) ? (
+                      <>
+                        <span className="confirm-note">Forget this run?</span>
+                        <button
+                          className="rowbtn"
+                          onClick={() => {
+                            setConfirming(null);
+                            void remove(run.id);
+                          }}
+                        >
+                          forget
+                        </button>
+                        <button className="rowbtn" onClick={() => setConfirming(null)}>
+                          keep
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="rowbtn"
+                        onClick={() => setConfirming({ kind: "run", id: run.id })}
+                        aria-label={`Forget the run of ${run.title}`}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -199,11 +231,27 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
             )}
           </section>
 
-          {summaries.length > 0 && (
-            <button className="btn" onClick={() => void clear()}>
-              Forget every run
-            </button>
-          )}
+          {summaries.length > 0 &&
+            (confirming?.kind === "all" ? (
+              <>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setConfirming(null);
+                    void clear();
+                  }}
+                >
+                  Yes, forget every run
+                </button>
+                <button className="btn" onClick={() => setConfirming(null)}>
+                  Keep them
+                </button>
+              </>
+            ) : (
+              <button className="btn" onClick={() => setConfirming({ kind: "all" })}>
+                Forget every run
+              </button>
+            ))}
         </>
       )}
 
