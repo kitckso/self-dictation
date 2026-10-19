@@ -39,7 +39,7 @@ npm run dev            # local only
 npm run dev -- --host  # reachable from a phone on your network
 npm run build
 npm run preview
-npm test               # domain unit tests
+npm test               # unit and component tests
 ```
 
 To use it on a phone, install it as a PWA from your browser's "Add to Home
@@ -55,9 +55,11 @@ Screen", or host `dist/` on any static host.
    left without seeing a word of it. Listen and write; the app shows nothing to
    check yourself against. Navigation never moves past a Chunk on its own.
    **Auto-play** walks the Run for you: the bottom bar sets how many times each
-   Chunk is spoken and how long to pause before the next play or repeat — 2
-   times and 5 seconds to begin with — and starts it. It stops when you touch a
-   speech control, move the cursor, or reach the end.
+   Chunk is spoken, how long to pause before the next play or repeat, and how
+   fast the Voice speaks — 2 times, 5 seconds, and its natural pace to begin
+   with. Speed applies to every play, not just auto-play, and a play already
+   under way finishes at the speed it started at. Auto-play stops when you
+   touch a speech control, move the cursor, or reach the end.
 3. **Results** — every Reference appears at once, beside what you typed and a
    diff of the two, or the ✓ all / ~ some / ✗ wrong buttons for what you wrote
    on paper. The score is the mean of both and settles as you mark.
@@ -123,6 +125,8 @@ See [GLOSSARY.md](GLOSSARY.md) for the vocabulary this project uses.
 ## Known limitations
 
 - Cantonese availability is entirely up to the device; see the table above.
+- Speed is a request to the device voice, not a promise: some voices clamp it,
+  and some ignore it outright, so 75% can sound the same as 100%.
 - No spaced repetition yet — Runs are recorded, but nothing schedules them.
 - Punctuation, whitespace and English case are ignored when grading. Traditional
   and Simplified Chinese are treated as different characters, so typing 简 into a

@@ -55,6 +55,12 @@ The smallest unit that is spoken in one go. Paragraph Mode dictates a Passage
 one Chunk at a time.
 _Avoid_: Segment, fragment, line, step, block
 
+**Speed**:
+A share of a Voice's natural pace at which a Run is spoken, chosen for the Run
+and forgotten when it ends. The device may clamp or ignore it, so a Speed is a
+request to the Voice rather than a promise about what will be heard.
+_Avoid_: Rate, tempo, playback speed
+
 **Reference**:
 The authoritative text for a Chunk or Vocabulary Item. It is never shown
 while dictating — a person who can see it does not need to listen.

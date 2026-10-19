@@ -127,7 +127,11 @@ class WebSpeechProvider implements TtsProvider {
     return new Promise<void>((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = options.lang;
-      if (options.rate) utterance.rate = options.rate;
+      // The platform clamps to [0.1, 10] itself; writing the range down says so
+      // out loud, and a falsy check would quietly drop a rate of 0.
+      if (options.rate !== undefined) {
+        utterance.rate = Math.min(10, Math.max(0.1, options.rate));
+      }
 
       void getVoices().then((voices) => {
         const voice = chooseVoice(voices, options.lang);

@@ -8,6 +8,7 @@ import {
   playSequence,
 } from "../domain/autoplay";
 import { significantLength } from "../domain/chunking";
+import { DEFAULT_RATE, formatRate, MAX_RATE, MIN_RATE, stepRate } from "../domain/rate";
 import { languageById, type LanguageId, type Mode } from "../domain/types";
 import { webSpeech } from "../tts";
 
@@ -56,6 +57,7 @@ export function Run({ run, onFinish }: Props) {
   const [autoOpen, setAutoOpen] = useState(false);
   const [repeats, setRepeats] = useState(2);
   const [delaySec, setDelaySec] = useState(5);
+  const [rate, setRate] = useState(DEFAULT_RATE);
   const [answerOn, setAnswerOn] = useState<AnswerOn>(() => defaultAnswerOn(run.language));
   const typingAllowed = answerOn === "typed";
   const listRef = useRef<HTMLDivElement>(null);
@@ -70,8 +72,19 @@ export function Run({ run, onFinish }: Props) {
   const playGen = useRef(0);
   /** Where auto-play should start; read without making the effect depend on the cursor. */
   const cursorRef = useRef(cursor);
+  /**
+   * The speed every play reads. Deliberately a ref rather than a dependency of
+   * the auto-play effect: the one play already under way finishes at the speed
+   * it began at, and the next one — a repeat, or the next Chunk — uses the new
+   * one. Retuning an utterance in flight is not possible anyway.
+   */
+  const rateRef = useRef(rate);
 
   useEffect(() => () => webSpeech.cancel(), []);
+
+  useEffect(() => {
+    rateRef.current = rate;
+  }, [rate]);
 
   useEffect(() => {
     cursorRef.current = cursor;
@@ -100,6 +113,7 @@ export function Run({ run, onFinish }: Props) {
         setSpeechError(null);
         await webSpeech.speak(run.chunks[step.index] ?? "", {
           lang: tag,
+          rate: rateRef.current,
           onError: (reason) => {
             if (mine()) setSpeechError(reason);
           },
@@ -146,6 +160,7 @@ export function Run({ run, onFinish }: Props) {
     try {
       await webSpeech.speak(run.chunks[i] ?? "", {
         lang: tag,
+        rate: rateRef.current,
         onError: (reason) => setSpeechError(reason),
       });
     } finally {
@@ -288,6 +303,27 @@ export function Run({ run, onFinish }: Props) {
               </button>
               <span>before each play</span>
             </div>
+            <div className="auto-line">
+              <span>speed</span>
+              <button
+                className="step"
+                aria-label="Slower"
+                disabled={rate <= MIN_RATE}
+                onClick={() => setRate((r) => stepRate(r, -1))}
+              >
+                −
+              </button>
+              <b>{formatRate(rate)}</b>
+              <button
+                className="step"
+                aria-label="Faster"
+                disabled={rate >= MAX_RATE}
+                onClick={() => setRate((r) => stepRate(r, 1))}
+              >
+                +
+              </button>
+              <span>for every play</span>
+            </div>
           </div>
         )}
 
@@ -313,9 +349,9 @@ export function Run({ run, onFinish }: Props) {
             className={`rail-btn${autoOpen ? " on" : ""}`}
             aria-expanded={autoOpen}
             onClick={() => setAutoOpen((open) => !open)}
-            title="Repeats and pause"
+            title="Repeats, pause and speed"
           >
-            {repeats}× · {delaySec}s
+            {repeats}× · {delaySec}s{rate !== DEFAULT_RATE && ` · ${formatRate(rate)}`}
           </button>
           <button className="rail-btn go" onClick={finish}>
             results
