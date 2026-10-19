@@ -36,6 +36,9 @@ function renderHistory(props: Partial<Parameters<typeof History>[0]> = {}) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // clearAllMocks empties the calls but leaves the implementation a test set,
+  // so each test has to put the empty list back or it inherits the last one.
+  vi.mocked(listRuns).mockResolvedValue([]);
 });
 
 describe("History", () => {

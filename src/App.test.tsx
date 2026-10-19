@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
+import type { Run } from "./domain/types";
 import { listCollections, listRuns, saveRun } from "./storage/db";
 
 vi.mock("./tts", () => ({
@@ -15,12 +16,29 @@ vi.mock("./tts", () => ({
   },
 }));
 
+/**
+ * A store that behaves like IndexedDB, so a Run saved on one screen is the
+ * same Run the next screen reads back.
+ */
+const { store, saveRunImpl } = vi.hoisted(() => {
+  const store: { runs: Run[] } = { runs: [] };
+  return {
+    store,
+    saveRunImpl: async (r: Run) => {
+      const at = store.runs.findIndex((x) => x.id === r.id);
+      // The same Run is rewritten as it is marked, so it is replaced rather
+      // than added twice.
+      if (at >= 0) store.runs[at] = r;
+      else store.runs.push(r);
+    },
+  };
+});
 vi.mock("./storage/db", () => ({
   listCollections: vi.fn().mockResolvedValue([]),
   saveCollection: vi.fn().mockResolvedValue(undefined),
   deleteCollection: vi.fn().mockResolvedValue(undefined),
-  saveRun: vi.fn().mockResolvedValue(undefined),
-  listRuns: vi.fn().mockResolvedValue([]),
+  saveRun: vi.fn(saveRunImpl),
+  listRuns: vi.fn(async () => store.runs),
   deleteRun: vi.fn().mockResolvedValue(undefined),
   clearRuns: vi.fn().mockResolvedValue(undefined),
 }));
@@ -41,6 +59,13 @@ afterEach(() => {
   cleanup();
   window.location.hash = "";
   vi.clearAllMocks();
+  store.runs.length = 0;
+  // clearAllMocks empties the calls but leaves whatever implementation a test
+  // set, so a test that made a write fail would otherwise make every test
+  // after it fail to save.
+  vi.mocked(saveRun).mockImplementation(saveRunImpl);
+  vi.mocked(listRuns).mockImplementation(async () => store.runs);
+  vi.mocked(listCollections).mockResolvedValue([]);
 });
 
 // jsdom has no layout, so element scrolling is a no-op rather than an error.
@@ -157,6 +182,26 @@ describe("App", () => {
     // Persistence is a convenience, never a precondition: the reveal still happens.
     expect(await screen.findByRole("button", { name: /run it again/i })).toBeTruthy();
     expect(screen.getByText(/cannot save your work/i)).toBeTruthy();
+  });
+
+  it("shows a finished Run in Your progress, and offers back what went wrong", async () => {
+    render(<App />);
+
+    // Set up one Vocabulary Item and dictate it.
+    fireEvent.click(screen.getByRole("button", { name: "Vocabulary" }));
+    fireEvent.change(screen.getByPlaceholderText(/圖書館/), { target: { value: "圖書館" } });
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+
+    // Cantonese is written on paper, so it is marked rather than typed.
+    fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /✗ wrong/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: /your progress/i }));
+
+    // The Run is listed, and the item that went wrong is offered back.
+    expect(await screen.findByText(/Untitled vocab/)).toBeTruthy();
+    expect(screen.getByText("圖書館")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Drill these 1/ })).toBeTruthy();
   });
 
   it("opens the past runs from Setup, and comes back to a new dictation", async () => {
