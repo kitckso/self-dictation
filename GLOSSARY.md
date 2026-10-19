@@ -1,0 +1,108 @@
+# Self Dictation
+
+A practice tool for dictating: a passage or vocabulary item is spoken aloud, the
+person using it writes down what they hear, and the result is compared against
+the authoritative text.
+
+## Language
+
+**Language**:
+One of English, Mandarin, or Cantonese. A Passage, Chunk, or Vocabulary Item
+belongs to exactly one Language.
+_Avoid_: Locale, dialect
+
+**Voice**:
+The device's rendering of a Language as speech. A Voice belongs to a Language,
+and a Voice is a property of the user's device rather than of this app.
+_Avoid_: Speaker, TTS engine, narrator
+
+**Voice Availability**:
+Whether the device can speak a Language at all. Cantonese is not guaranteed:
+a device may have no Cantonese Voice, in which case Cantonese cannot be
+dictated on it.
+_Avoid_: Support, compatibility
+
+## Material
+
+**Collection**:
+A named, saved group of material that a person can return to and drill again
+later. It is the unit of organisation and the unit of persistence.
+_Avoid_: Deck, library, book, project
+
+**Passage**:
+A block of text in a single Language that can be dictated from start to finish.
+A Passage is subdivided into Chunks.
+_Avoid_: Paragraph, text, document, article
+
+**Vocabulary Item**:
+A short word or phrase in a single Language, drilled on its own rather than in
+prose.
+_Avoid_: Word, term, flashcard
+
+**Mode**:
+One of Paragraph or Vocabulary — which kind of material a Run is made of.
+_Avoid_: Drill type, exercise type, category
+
+## A Run
+
+**Run**:
+One complete attempt at dictating a Collection's Passage or Vocabulary Items,
+from start to finish. A Run belongs to a person, a Mode, and a point in time.
+_Avoid_: Session, attempt, exercise, drill, quiz
+
+**Chunk**:
+The smallest unit that is spoken in one go. Paragraph Mode dictates a Passage
+one Chunk at a time.
+_Avoid_: Segment, fragment, line, step, block
+
+**Reference**:
+The authoritative text for a Chunk or Vocabulary Item. It is never shown
+while dictating — a person who can see it does not need to listen.
+_Avoid_: Prompt, source, correct answer, ground truth
+
+**Transcript**:
+What the person typed in response to a spoken Chunk or Vocabulary Item.
+
+A Transcript is only a valid answer in a Latin Writing System. Typing English
+tests spelling directly, because there is nothing between knowing how a word
+is spelled and producing it. Typing Chinese does not: an input method turns a
+sound into characters without the writer knowing how those characters are
+formed, so a Transcript of Chinese measures the input method rather than the
+person, and grading it produces a confident and meaningless number. For Cantonese
+and Mandarin the answer is written by hand.
+_Avoid_: Input, response, answer, submission
+
+**Paper Answer**:
+The ordinary way to answer a Cantonese or Mandarin Chunk: write it on paper,
+then mark yourself when the Reference is revealed. Never produces a Transcript.
+_Avoid_: Handwriting, offline answer, written answer
+
+**Overlay**:
+A phonetic support layer — Jyutping for Cantonese, Pinyin for Mandarin — shown
+once the Reference is revealed, to help a person read what they misheard. An
+Overlay is never shown while dictating, because it reveals the answer as
+effectively as the Reference does.
+_Avoid_: Hint, annotation, furigana, transliteration
+
+**Reveal**:
+The moment a Transcript is compared against its Reference and the Reference
+becomes visible. A Reveal ends the attempt at one Chunk and shows the Overlay
+alongside it.
+_Avoid_: Answering, checking, grading
+
+**Grading**:
+The comparison of a Transcript against its Reference, yielding an accuracy
+figure and a display of where they differ.
+_Avoid_: Scoring, marking, evaluation
+
+**Setup**:
+The step before a Run in which a Language, a Mode, and the material are chosen.
+Every Run begins at Setup; nothing is chosen mid-Run.
+_Avoid_: Onboarding, start screen, new run
+
+## Writing Systems
+
+**Writing System**:
+The orthography a person is asked to reproduce — Latin orthography for English,
+Chinese characters for Cantonese and Mandarin.
+_Avoid_: Script, alphabet
