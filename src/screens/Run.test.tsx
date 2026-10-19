@@ -51,7 +51,7 @@ describe("Run", () => {
     fireEvent.change(screen.getAllByPlaceholderText("type what you hear")[0], {
       target: { value: "圖書館" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /results/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^end$/i }));
 
     expect(onFinish).toHaveBeenCalledWith(["圖書館", ""]);
   });
@@ -74,6 +74,14 @@ describe("Run", () => {
     fireEvent.click(screen.getByRole("button", { name: "auto" }));
 
     expect(webSpeech.speak).toHaveBeenCalledWith("圖書館", expect.objectContaining({ rate: 0.75 }));
+  });
+
+  it("shrinks the rail's play button to a glyph without losing which Chunk it plays", () => {
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    const play = screen.getByRole("button", { name: "Speak chunk 1" });
+
+    expect(play.textContent).toBe("▶");
   });
 
   it("shows a non-default speed on the rail, not only inside the popover", () => {

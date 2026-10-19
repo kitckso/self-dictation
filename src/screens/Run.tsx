@@ -63,6 +63,11 @@ export function Run({ run, onFinish }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const tag = speakTag(run.language);
   const typedCount = Object.values(transcripts).filter((t) => t.trim()).length;
+  /**
+   * The rail's play button is a glyph to save width, so its name has to say
+   * what the glyph means — including which Chunk it would speak.
+   */
+  const playLabel = auto || speaking === cursor ? "Stop" : `Speak chunk ${cursor + 1}`;
 
   /**
    * Whoever bumps this owns the speaker. A tap, a stop, or the effect being
@@ -328,8 +333,13 @@ export function Run({ run, onFinish }: Props) {
         )}
 
         <div className="run-rail">
-          <button className="k" onClick={() => void speak(cursor)}>
-            {auto || speaking === cursor ? "■ stop" : `▶ speak ${cursor + 1}`}
+          <button
+            className="k"
+            aria-label={playLabel}
+            title={playLabel}
+            onClick={() => void speak(cursor)}
+          >
+            {auto || speaking === cursor ? "■" : "▶"}
           </button>
           <button className="rail-btn" onClick={back} disabled={cursor === 0}>
             ↑
@@ -353,8 +363,12 @@ export function Run({ run, onFinish }: Props) {
           >
             {repeats}× · {delaySec}s{rate !== DEFAULT_RATE && ` · ${formatRate(rate)}`}
           </button>
-          <button className="rail-btn go" onClick={finish}>
-            results
+          <button
+            className="rail-btn go"
+            title="End the Run and reveal the Passage"
+            onClick={finish}
+          >
+            end
           </button>
         </div>
       </div>
