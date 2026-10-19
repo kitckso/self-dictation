@@ -71,16 +71,7 @@ export default function App() {
         <Setup onStart={start} voices={voices} canEnumerate={canEnumerate} />
       )}
       {screen.name === "run" && (
-        <Run
-          run={screen.run}
-          onFinish={(results) => finish(screen.run, results)}
-          onCancel={() =>
-            finish(
-              screen.run,
-              screen.run.chunks.map(() => ({ transcript: "", outcome: null })),
-            )
-          }
-        />
+        <Run run={screen.run} onFinish={(results) => finish(screen.run, results)} />
       )}
       {screen.name === "results" && (
         <Results

@@ -52,7 +52,11 @@ Screen", or host `dist/` on any static host.
    duplicate, so re-drilling a sample refreshes it in place.
 2. **Run** — each Chunk gets its own numbered slot so you can see how much is
    left without seeing a word of it. Speak, write, reveal, mark. Navigation
-   never moves past a Chunk on its own.
+   never moves past a Chunk on its own. **Auto-play** walks the Run for you:
+   the bottom bar sets how many times each Chunk is spoken and how long to
+   pause before the next play or repeat — 2 times and 5 seconds to begin with —
+   and starts it. It stops when you touch a speech control, move the cursor,
+   or reach the end.
 3. **Results** — the whole passage with your answers against the originals.
 
 **Paragraph** mode splits on sentence boundaries (`。！？` / `.?!`), falling back
