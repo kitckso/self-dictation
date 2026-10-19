@@ -3,6 +3,8 @@ import {
   drillText,
   groupByLanguage,
   itemProgress,
+  pickRandom,
+  RANDOM_DRILL_SIZE,
   runText,
   summarise,
   weaknesses,
@@ -128,15 +130,15 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
 
       {runs === null ? (
         <p className="note">Looking for your past runs…</p>
+      ) : unreadable ? (
+        // There is nothing to show: the store could not be read at all. Saying
+        // "Nothing yet" underneath would claim it is empty instead.
+        <p className="note bad">
+          Your past runs could not be read. This browser is blocking storage — private browsing
+          or a full store is the usual reason.
+        </p>
       ) : (
         <>
-          {unreadable && (
-            <p className="note bad">
-              Your past runs could not be read. This browser is blocking storage — private browsing
-              or a full store is the usual reason.
-            </p>
-          )}
-
           {groups.length > 0 && (
             <section>
               <p className="lbl">Needs practice</p>
@@ -150,7 +152,8 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
                     <div className="saved-row" key={`${group.language}:${item.text}`}>
                       <span className="nm">{item.text}</span>
                       <span className="chip">
-                        {item.wrong} time{item.wrong === 1 ? "" : "s"}
+                        {item.correct} right · {item.wrong} wrong
+                        {item.partial > 0 ? ` · ${item.partial} half` : ""}
                       </span>
                     </div>
                   ))}
@@ -163,6 +166,15 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
                   >
                     Drill these {group.items.length}
                   </button>
+                  {group.items.length > RANDOM_DRILL_SIZE && (
+                    <button
+                      className="btn"
+                      onClick={() => drill(pickRandom(group.items, RANDOM_DRILL_SIZE))}
+                      aria-label={`Random ${RANDOM_DRILL_SIZE} of these ${languageById(group.language).label} items`}
+                    >
+                      Random {RANDOM_DRILL_SIZE}
+                    </button>
+                  )}
                 </div>
               ))}
             </section>
@@ -196,9 +208,14 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
                     </button>
                     {askingAboutRun(confirming, run.id) ? (
                       <>
-                        <span className="confirm-note">Forget this run?</span>
+                        <span className="confirm-note" role="status">
+                          Forget this run?
+                        </span>
                         <button
                           className="rowbtn"
+                          // The ✕ that asked has just gone, taking keyboard
+                          // focus with it; put focus on the answer instead.
+                          autoFocus
                           onClick={() => {
                             setConfirming(null);
                             void remove(run.id);
@@ -236,6 +253,7 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
               <>
                 <button
                   className="btn"
+                  autoFocus
                   onClick={() => {
                     setConfirming(null);
                     void clear();

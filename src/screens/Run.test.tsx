@@ -143,6 +143,35 @@ describe("Run", () => {
     expect(screen.getByRole("button", { name: "Stop" }).textContent).toBe("■");
   });
 
+  it("says so when the browser refuses to speak", async () => {
+    vi.mocked(webSpeech.speak).mockResolvedValue("failed");
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "▶ speak" })[0]!);
+
+    expect(await screen.findByText(/speech failed.*refused to speak/i)).toBeTruthy();
+  });
+
+  it("says so when the voice stops half-way", async () => {
+    vi.mocked(webSpeech.speak).mockResolvedValue("cut-off");
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "▶ speak" })[0]!);
+
+    expect(await screen.findByText(/speech failed.*stopped before it finished/i)).toBeTruthy();
+  });
+
+  it("stops auto-play rather than walking through the Passage in silence", async () => {
+    vi.mocked(webSpeech.speak).mockResolvedValue("failed");
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "auto" }));
+
+    expect(await screen.findByText(/refused to speak/i)).toBeTruthy();
+    // The loop stopped at the first Chunk instead of racing to the end.
+    expect(webSpeech.speak).toHaveBeenCalledTimes(1);
+  });
+
   it("names the rail arrows, which are glyphs and mean nothing aloud", () => {
     render(<Run run={vocabRun()} onFinish={() => {}} />);
 

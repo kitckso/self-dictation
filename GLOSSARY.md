@@ -128,7 +128,7 @@ so it outlives the Run that established it.
 _Avoid_: Stats, history, record, analytics
 
 **Weakness**:
-Material whose most recent answer went wrong, and which is therefore worth
+Material whose most recent answer was not right, and which is therefore worth
 practising again. Only a correct answer clears it. A partial answer and
 skipping it both leave it standing: neither says the material can be done,
 and "not yet right" is what a Weakness is.

@@ -103,6 +103,25 @@ describe("the voice list", () => {
     expect(await webSpeech.listVoices()).toHaveLength(2);
   });
 
+  it("tells a screen holding its own copy that the list changed", async () => {
+    // The provider cannot refresh React state; the screen has to read again.
+    vi.resetModules();
+    const mod = await import("./webSpeech");
+    synth.voices = [voice("Siri", "en-GB")];
+    await mod.webSpeech.listVoices();
+
+    const changed = vi.fn();
+    const off = mod.onVoicesChanged(changed);
+
+    synth.voices = [voice("Siri", "en-GB"), voice("Sinji", "zh-HK")];
+    synth.announce();
+    expect(changed).toHaveBeenCalledTimes(1);
+
+    off();
+    synth.announce();
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
   it("shares one slow read rather than stacking a listener per caller", async () => {
     // Chrome and Safari hand back [] on the first call of a session.
     const webSpeech = await provider();
@@ -226,6 +245,24 @@ describe("speaking", () => {
     utterances[0]?.onend?.();
 
     expect(await speaking).toBe("finished");
+  });
+
+  it("reports a failure when there is no speech support at all", async () => {
+    Reflect.deleteProperty(window, "speechSynthesis");
+    const webSpeech = await provider();
+
+    expect(await webSpeech.speak("Hello", { lang: "en-GB" })).toBe("failed");
+  });
+
+  it("reports a failure and tells the caller when the platform refuses", async () => {
+    const webSpeech = await provider();
+    const onError = vi.fn();
+
+    const speaking = webSpeech.speak("Hello", { lang: "en-GB", onError });
+    utterances[0]?.onerror?.({ error: "synthesis-failed" });
+
+    expect(await speaking).toBe("failed");
+    expect(onError).toHaveBeenCalledWith("synthesis-failed");
   });
 
   it("reports a voice the platform cut short", async () => {

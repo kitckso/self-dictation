@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
 import type { Run } from "./domain/types";
 import { listCollections, listAllRuns, saveRun } from "./storage/db";
+import { onVoicesChanged, webSpeech } from "./tts";
 
 vi.mock("./tts", () => ({
   isSupported: () => true,
+  onVoicesChanged: vi.fn(() => () => {}),
   webSpeech: {
     listVoices: vi.fn().mockResolvedValue([]),
     canEnumerateVoices: vi.fn().mockResolvedValue(false),
@@ -114,6 +116,19 @@ describe("App", () => {
     // Nothing was shared, so there is nothing to wait for.
     expect(document.querySelector("textarea")).toBeTruthy();
     expect(screen.queryByText(/shared link/i)).toBeNull();
+  });
+
+  it("reads the voices again when the platform's list changes", async () => {
+    render(<App />);
+    await waitFor(() => expect(webSpeech.listVoices).toHaveBeenCalledTimes(1));
+
+    // The provider cannot refresh React state; App has to be told and re-read.
+    const listener = vi.mocked(onVoicesChanged).mock.calls[0]?.[0];
+    expect(listener).toBeTypeOf("function");
+
+    act(() => listener?.());
+
+    await waitFor(() => expect(webSpeech.listVoices).toHaveBeenCalledTimes(2));
   });
 
   it("records when a Run began, not only when it ended", async () => {

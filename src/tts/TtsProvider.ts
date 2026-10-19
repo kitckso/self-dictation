@@ -18,10 +18,12 @@ export interface SpeakOptions {
  * How a piece of speech ended.
  *
  * "finished" means the platform said the utterance was over. "cut-off" means
- * it stopped without finishing — the words may not all have been spoken, and
- * saying so is better than reporting a success that did not happen.
+ * it stopped without finishing — the words may not all have been spoken — and
+ * "failed" means it never spoke at all: there is no speech support, or the
+ * platform refused. Saying so is better than reporting a success that did not
+ * happen.
  */
-export type SpeakResult = "finished" | "cut-off";
+export type SpeakResult = "finished" | "cut-off" | "failed";
 
 /**
  * The seam between the app and whatever actually makes sound.
@@ -44,8 +46,9 @@ export interface TtsProvider {
   /**
    * Resolves when speech finishes, or when the provider gives up waiting.
    *
-   * The result says which of the two happened, so a caller can tell a voice
-   * that worked from one the platform cut short.
+   * The result says which of the three happened, so a caller can tell a voice
+   * that worked from one the platform cut short, and both from one that never
+   * spoke. Only "finished" is a success.
    */
   speak(text: string, options: SpeakOptions): Promise<SpeakResult>;
   cancel(): void;

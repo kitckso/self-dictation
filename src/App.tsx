@@ -4,7 +4,7 @@ import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
 import type { Outcome, Run as RunRecord, SetupFill, StartInput } from "./domain/types";
 import { saveRun } from "./storage/db";
 import { newId } from "./lib/id";
-import { isSupported, webSpeech } from "./tts";
+import { isSupported, onVoicesChanged, webSpeech } from "./tts";
 import type { VoiceOption } from "./tts";
 import { Setup } from "./screens/Setup";
 import { Results } from "./screens/Results";
@@ -71,16 +71,22 @@ export default function App() {
       setCanEnumerate(false);
       return;
     }
-    // Either promise rejecting means the same thing to the person: the device
-    // cannot tell us what it has, so availability is genuinely unknown.
-    void webSpeech
-      .listVoices()
-      .then(setVoices)
-      .catch(() => setCanEnumerate(false));
-    void webSpeech
-      .canEnumerateVoices()
-      .then(setCanEnumerate)
-      .catch(() => setCanEnumerate(false));
+    function readVoices() {
+      // Either promise rejecting means the same thing to the person: the device
+      // cannot tell us what it has, so availability is genuinely unknown.
+      void webSpeech
+        .listVoices()
+        .then(setVoices)
+        .catch(() => setCanEnumerate(false));
+      void webSpeech
+        .canEnumerateVoices()
+        .then(setCanEnumerate)
+        .catch(() => setCanEnumerate(false));
+    }
+    readVoices();
+    // A language pack can be installed after setup. The provider notices, and
+    // this screen holds its own copy of the list, so it has to read again.
+    return onVoicesChanged(readVoices);
   }, []);
 
   useEffect(() => {

@@ -20,6 +20,10 @@ export interface ItemProgress {
   mode: Mode;
   /** How many times it has been answered. */
   answered: number;
+  /** How many of those went right. */
+  correct: number;
+  /** How many were marked half-right, and so are not yet cleared. */
+  partial: number;
   /** How many of those went wrong. */
   wrong: number;
   /**
@@ -106,6 +110,8 @@ export function itemProgress(runs: Run[]): ItemProgress[] {
           language: run.language,
           mode: run.mode,
           answered: 0,
+          correct: 0,
+          partial: 0,
           wrong: 0,
           lastWrong: false,
           lastSeen: run.startedAt,
@@ -113,7 +119,9 @@ export function itemProgress(runs: Run[]): ItemProgress[] {
 
       if (answer !== "none") {
         seen.answered++;
-        if (answer === "wrong") seen.wrong++;
+        if (answer === "right") seen.correct++;
+        else if (answer === "wrong") seen.wrong++;
+        else seen.partial++;
         // Only a correct answer clears a Weakness. A partial one is half a
         // right answer: it says the material is still hard, which is what a
         // Weakness is for. Skipping leaves it exactly as it was.
@@ -162,6 +170,31 @@ export function groupByLanguage(items: ItemProgress[]): WeaknessGroup[] {
  */
 export function drillText(items: ItemProgress[]): string {
   return items.map((i) => i.text).join("\n");
+}
+
+/** How many Weaknesses a random drill takes. */
+export const RANDOM_DRILL_SIZE = 5;
+
+/**
+ * Up to `count` items, picked at random and without repeats.
+ *
+ * A Weakness drill over everything becomes a chore once there are dozens of
+ * them, so a shorter random draw gives the same material without asking for
+ * all of it every time. `random` is injectable so the draw can be tested.
+ */
+export function pickRandom<T>(items: T[], count: number, random: () => number = Math.random): T[] {
+  const pool = [...items];
+  const take = Math.max(0, Math.min(count, pool.length));
+
+  // Fisher–Yates, stopping once enough have been moved to the front.
+  for (let i = 0; i < take; i++) {
+    const j = i + Math.floor(random() * (pool.length - i));
+    const chosen = pool[i]!;
+    pool[i] = pool[j]!;
+    pool[j] = chosen;
+  }
+
+  return pool.slice(0, take);
 }
 
 /** How a Run went. */

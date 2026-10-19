@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { webSpeech } from "../tts";
 import { Setup } from "./Setup";
 
@@ -18,6 +18,10 @@ vi.mock("../storage/db", () => ({
   saveCollection: vi.fn().mockResolvedValue(undefined),
   deleteCollection: vi.fn().mockResolvedValue(undefined),
 }));
+
+beforeEach(() => {
+  vi.mocked(webSpeech.speak).mockResolvedValue("finished");
+});
 
 afterEach(cleanup);
 
@@ -105,5 +109,42 @@ describe("Setup", () => {
 
     expect(await screen.findByText(/stopped before it had finished/i)).toBeTruthy();
     expect(screen.queryByText(/finished playing/i)).toBeNull();
+  });
+
+  it("says the browser refused when speech failed outright", async () => {
+    // A browser with no speech support, or one that rejects the utterance, has
+    // not played anything.
+    vi.mocked(webSpeech.speak).mockResolvedValue("failed");
+    renderSetup();
+
+    fireEvent.click(screen.getByRole("button", { name: /test this voice/i }));
+
+    expect(await screen.findByText(/refused to speak/i)).toBeTruthy();
+    expect(screen.queryByText(/finished playing/i)).toBeNull();
+  });
+
+  it("ignores an older test that settles after a newer one", async () => {
+    // The first test belongs to the old Language. Changing the Language and
+    // starting a second test must not let the first answer for it.
+    const settle: ((result: "finished" | "cut-off" | "failed") => void)[] = [];
+    vi.mocked(webSpeech.speak).mockImplementation(
+      () => new Promise((resolve) => settle.push(resolve)),
+    );
+    renderSetup();
+
+    fireEvent.click(screen.getByRole("button", { name: /test this voice/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Mandarin/ }));
+    fireEvent.click(screen.getByRole("button", { name: /test this voice/i }));
+
+    await act(async () => {
+      settle[1]?.("finished");
+    });
+
+    await act(async () => {
+      settle[0]?.("cut-off");
+    });
+
+    expect(screen.getByText(/finished playing/i)).toBeTruthy();
+    expect(screen.queryByText(/stopped before it had finished/i)).toBeNull();
   });
 });

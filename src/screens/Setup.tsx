@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { draftTitle, findCollectionByTitle, planCollectionSave } from "../domain/collections";
 import { formatVocabText, toChunks } from "../domain/chunking";
 import {
@@ -78,6 +78,14 @@ export function Setup({
   const [collections, setCollections] = useState<Collection[]>([]);
   const [testState, setTestState] = useState<"idle" | "speaking" | "ok" | "cut" | "failed">("idle");
   const [sharing, setSharing] = useState(false);
+  /**
+   * Which voice test is current.
+   *
+   * Changing the Language makes an older test stale: its promise can still
+   * settle, and it must not answer for the voice now being tried. Every new
+   * test bumps this, and a result from an older one is dropped.
+   */
+  const testGen = useRef(0);
 
   useEffect(() => {
     // An unreadable store is worth saying out loud rather than showing an empty
@@ -87,6 +95,7 @@ export function Setup({
 
   function testVoice() {
     if (testState === "speaking") return;
+    const gen = ++testGen.current;
     setTestState("speaking");
     const sample =
       language === "en"
@@ -97,14 +106,17 @@ export function Setup({
     void webSpeech
       .speak(sample, {
         lang: languageById(language).tags[0] ?? "en",
-        onError: () => setTestState("failed"),
+        onError: () => {
+          if (gen === testGen.current) setTestState("failed");
+        },
       })
-      .then((result) =>
+      .then((result) => {
+        if (gen !== testGen.current) return;
         // The browser can stop speaking without saying so — Chrome does it
-        // silently at around fifteen seconds. "Finished playing." for a voice
-        // that never got going would be a lie.
-        setTestState((s) => (s === "speaking" ? (result === "finished" ? "ok" : "cut") : s)),
-      );
+        // silently at around fifteen seconds — or refuse altogether. "Finished
+        // playing." for a voice that never got going would be a lie.
+        setTestState(result === "finished" ? "ok" : result === "failed" ? "failed" : "cut");
+      });
   }
 
   const hasVoice = useMemo(() => hasVoiceFor(voices, language), [language, voices]);
@@ -167,6 +179,8 @@ export function Setup({
               aria-pressed={language === l.id}
               onClick={() => {
                 setLanguage(l.id);
+                // Any test still in flight belonged to the old Language.
+                testGen.current += 1;
                 setTestState("idle");
               }}
             >

@@ -67,10 +67,11 @@ Screen", or host `dist/` on any static host.
    on paper. The score is the mean of both and settles as you mark.
 4. **Progress** — every Run is kept, so **Your progress** can show what you
    have done and, more usefully, which material caught you out. Anything whose
-   most recent answer was wrong is listed as a Weakness, grouped by Language,
-   and can be drilled again in one tap. A Weakness is cleared by getting it
-   right — skipping it does not count, because not doing it says nothing about
-   whether it can be done.
+   most recent answer was not right is listed as a Weakness, grouped by
+   Language, with how often it went right, half-right and wrong. A Weakness is
+   cleared only by getting it right — a partial answer or a skip leaves it
+   standing, because neither says the material can be done. Drill them all, or
+   draw a random five.
 
 **Paragraph** mode splits on sentence boundaries (`。！？` / `.?!`), falling back
 to clause punctuation (`，、；`) for long sentences, capped at 70 characters.

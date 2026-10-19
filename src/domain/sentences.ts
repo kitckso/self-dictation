@@ -18,9 +18,6 @@ const TITLE_ABBREVIATION = new Set([
   "prof",
   "rev",
   "hon",
-  "st",
-  "sr",
-  "jr",
   "gen",
   "col",
   "capt",
@@ -41,6 +38,8 @@ const TITLE_ABBREVIATION = new Set([
  */
 const SOFT_ABBREVIATION = new Set([
   "etc",
+  "jr",
+  "sr",
   "cf",
   "al",
   "vs",
@@ -96,47 +95,94 @@ const SOFT_ABBREVIATION = new Set([
 const CLOSING = new Set(['"', "'", "”", "’", ")", "]", "»", "!", "?"]);
 
 /**
+ * Dotted abbreviations that can stand at the end of a sentence.
+ *
+ * A dotted run can also be a person's initials — "J.R.R. Tolkien" — which a
+ * name follows just as it follows a title. There is no way to tell the two
+ * shapes apart, so only the ones that really are abbreviations are allowed to
+ * end a sentence; an unknown run stays with what follows it.
+ */
+const DOTTED_ABBREVIATION = new Set([
+  "us",
+  "usa",
+  "uk",
+  "un",
+  "eu",
+  "am",
+  "pm",
+  "ad",
+  "bc",
+  "bce",
+  "ce",
+  "eg",
+  "ie",
+  "aka",
+  "phd",
+  "msc",
+  "bsc",
+]);
+
+/** What a full stop in a dotted run turned out to belong to. */
+interface DottedRun {
+  /** The run as written, dots included — "U.S.", "Ph.D.", "J.". */
+  word: string;
+  /** The index of the last dot in the run; only that one can end a sentence. */
+  lastDot: number;
+  /** A single capital is an initial, which never ends a sentence. */
+  initial: boolean;
+  /** Whether this run is an abbreviation that can end a sentence. */
+  canEnd: boolean;
+}
+
+/**
  * The dotted word a full stop belongs to, or null.
  *
  * "a.m." is one abbreviation spread over two dots, so the run has to be taken
- * as a whole: the first dot of it is decided by the second. A single letter
- * on its own is an initial, and has to be capital — "I said a." ends a
- * sentence, "J. Smith" does not.
+ * as a whole: the first dot of it is decided by the second. Components may be
+ * one to three letters, so "Ph.D." and "M.Sc." count as dotted words too.
+ * A single capital on its own is an initial: "J. Smith" stays together, but
+ * "I said a." ends a sentence because "a" is not capital.
  */
-function dottedRun(text: string, dot: number): string | null {
-  let firstLetter = dot - 1;
-  let lastDot = dot;
+function dottedRun(text: string, dot: number): DottedRun | null {
+  // A run is letters and dots with nothing between: spaces and other
+  // punctuation end it. Taking the whole token, rather than stepping over
+  // single-letter pairs, is what lets a component be longer than one letter.
+  let start = dot;
+  while (start > 0 && /[A-Za-z.]/.test(text[start - 1] ?? "")) start--;
+  let end = dot + 1;
+  while (end < text.length && /[A-Za-z.]/.test(text[end] ?? "")) end++;
 
-  // Back over any pair already passed: a letter, then a dot, then a letter.
-  while (
-    firstLetter - 2 >= 0 &&
-    text[firstLetter - 1] === "." &&
-    /[A-Za-z]/.test(text[firstLetter - 2] ?? "")
-  ) {
-    firstLetter -= 2;
+  const word = text.slice(start, end);
+  if (!word.endsWith(".")) return null;
+
+  const initial = /^[A-Z]\.$/.test(word);
+  const dotted = /^(?:[A-Za-z]{1,3}\.){2,}$/.test(word);
+  if (!initial && !dotted) {
+    // A lowercase single letter is a word, not an initial: "I said a." is a
+    // sentence end, so leave it to the ordinary path.
+    return null;
   }
-  // And forward over any that follow.
-  while (
-    lastDot + 2 < text.length &&
-    /[A-Za-z]/.test(text[lastDot + 1] ?? "") &&
-    text[lastDot + 2] === "."
-  ) {
-    lastDot += 2;
-  }
 
-  if (firstLetter < 0 || !/[A-Za-z]/.test(text[firstLetter] ?? "")) return null;
+  // Only the final dot of the run can end a sentence; the earlier ones are
+  // inside it. For an initial the last dot is also the only one.
+  const lastDot = end - 1;
+  const bare = word.replaceAll(".", "").toLowerCase();
 
-  const word = text.slice(firstLetter, lastDot + 1);
-  // One pair is an initial and has to be capital; two or more is a dotted
-  // abbreviation, and may be either case.
-  if (!/^(?:[A-Za-z]\.){1,3}$/.test(word)) return null;
-  if (word.length === 2 && !/[A-Z]/.test(word[0] ?? "")) return null;
+  return {
+    word,
+    lastDot,
+    initial,
+    canEnd: !initial && DOTTED_ABBREVIATION.has(bare),
+  };
+}
 
-  // It has to be a whole word, not the tail of a longer one: the "n." at the
-  // end of "ran." is not an initial.
-  if (firstLetter > 0 && /[A-Za-z]/.test(text[firstLetter - 1] ?? "")) return null;
-
-  return word;
+/** The word immediately before `start`, or "" if there is none. */
+function wordBefore(text: string, start: number): string {
+  let end = start - 1;
+  while (end >= 0 && !/[A-Za-z]/.test(text[end] ?? "")) end--;
+  let begin = end;
+  while (begin >= 0 && /[A-Za-z]/.test(text[begin] ?? "")) begin--;
+  return text.slice(begin + 1, end + 1);
 }
 
 /**
@@ -174,7 +220,15 @@ function endsSentence(text: string, i: number): boolean {
   if (/\d/.test(before) && /\d/.test(after)) return false;
 
   // An initial or a dotted abbreviation: J. Smith, a.m., e.g.
-  if (dottedRun(text, i)) return false;
+  const run = dottedRun(text, i);
+  if (run) {
+    // Inside an abbreviation, every dot but the last is decided by the run.
+    if (i !== run.lastDot) return false;
+    // A run that cannot end a sentence — an initial, or an unknown name-like
+    // acronym — keeps the word after it.
+    if (!run.canEnd) return false;
+    return startsNewSentence(nextWord(text, i + 1));
+  }
 
   // The word the full stop came after.
   let start = i;
@@ -184,6 +238,13 @@ function endsSentence(text: string, i: number): boolean {
 
   // A title is always followed by a name.
   if (TITLE_ABBREVIATION.has(word)) return false;
+
+  // "St." is Street after a name (Main St. Then...) and Saint before one
+  // (St. John). Only the street reading can end a sentence.
+  if (word === "st") {
+    if (!/^[A-Z]/.test(wordBefore(text, start))) return false;
+    return startsNewSentence(nextWord(text, i + 1));
+  }
 
   // These can end a sentence, but only if a new one starts after them.
   if (SOFT_ABBREVIATION.has(word)) return startsNewSentence(nextWord(text, i + 1));
@@ -204,10 +265,10 @@ export function toSentences(text: string): string[] {
   for (let i = 0; i < text.length; i++) {
     if (!endsSentence(text, i)) continue;
 
+    // Closing marks and the dots of an ellipsis both belong to the sentence,
+    // and may alternate: "Wait..." closes after the dots, not before them.
     let end = i + 1;
-    while (end < text.length && CLOSING.has(text[end] ?? "")) end++;
-    // An ellipsis is one mark repeated, and belongs to the sentence.
-    while (end < text.length && text[end] === ".") end++;
+    while (end < text.length && (CLOSING.has(text[end] ?? "") || text[end] === ".")) end++;
 
     const piece = text.slice(start, end).trim();
     if (piece) out.push(piece);

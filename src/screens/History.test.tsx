@@ -81,6 +81,45 @@ describe("History", () => {
     expect(screen.queryByText("醫院")).toBeNull();
   });
 
+  it("shows how often the material went right, half-right and wrong", async () => {
+    // A partial answer is still a Weakness, so its count has to be visible
+    // rather than showing "0 times" beside it.
+    vi.mocked(listAllRuns).mockResolvedValue([
+      makeRun({
+        chunks: ["圖書館", "醫院", "機場"],
+        results: [
+          { index: 0, transcript: "", outcome: "wrong" },
+          { index: 1, transcript: "", outcome: "correct" },
+          { index: 2, transcript: "", outcome: "partial" },
+        ],
+      }),
+    ]);
+    renderHistory();
+
+    expect(await screen.findByText(/0 right · 1 wrong/)).toBeTruthy();
+    expect(screen.getByText(/0 right · 0 wrong · 1 half/)).toBeTruthy();
+  });
+
+  it("offers a random draw of a long Weakness list", async () => {
+    const chunks = ["一", "二", "三", "四", "五", "六", "七"];
+    vi.mocked(listAllRuns).mockResolvedValue([
+      makeRun({
+        chunks,
+        results: chunks.map((_, i) => ({ index: i, transcript: "", outcome: "wrong" })),
+      }),
+    ]);
+    const onDrill = vi.fn();
+    renderHistory({ onDrill });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Random 5/ }));
+
+    const text = vi.mocked(onDrill).mock.calls[0]?.[0]?.text as string;
+    const picked = text.split("\n");
+    expect(picked).toHaveLength(5);
+    expect(new Set(picked).size).toBe(5);
+    expect(picked.every((item) => chunks.includes(item))).toBe(true);
+  });
+
   it("drills the material that needs practice, in the language it is written in", async () => {
     vi.mocked(listAllRuns).mockResolvedValue([
       makeRun({
@@ -163,6 +202,8 @@ describe("History", () => {
 
     expect(screen.getByText(/forget this run/i)).toBeTruthy();
     expect(deleteRun).not.toHaveBeenCalled();
+    // The ✕ has gone; focus moved to the answer rather than falling to body.
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /^forget$/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /^keep$/i }));
     expect(screen.queryByText(/forget this run/i)).toBeNull();
@@ -249,6 +290,8 @@ describe("History", () => {
       renderHistory();
 
       expect(await screen.findByText(/could not be read/i)).toBeTruthy();
+      // The store is unreadable, not empty; "Nothing yet" would claim otherwise.
+      expect(screen.queryByText(/nothing yet/i)).toBeNull();
     });
 
     it("still offers a way out", async () => {

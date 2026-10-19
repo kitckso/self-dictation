@@ -56,6 +56,8 @@ let voicesCache: SpeechSynthesisVoice[] | null = null;
 let voicesRead: Promise<SpeechSynthesisVoice[]> | null = null;
 /** The platform's change-notice listener, attached once for the page's life. */
 let watching = false;
+/** Screens that hold their own copy of the voice list. */
+const voiceListeners = new Set<() => void>();
 /** When an empty list was found, or 0 if there has not been one. */
 let emptyVoicesAt = 0;
 
@@ -73,6 +75,22 @@ function invalidateVoices(): void {
   voicesCache = null;
   voicesRead = null;
   emptyVoicesAt = 0;
+  // The screens hold their own copy of the list, so forgetting ours is only
+  // half the job: they have to be told to read it again.
+  for (const listener of Array.from(voiceListeners)) listener();
+}
+
+/**
+ * Be told when the platform's voice list changes.
+ *
+ * The provider drops its cached list on `voiceschanged`; a screen showing
+ * voices has to read them again. Returns the unsubscribe function.
+ */
+export function onVoicesChanged(listener: () => void): () => void {
+  voiceListeners.add(listener);
+  return () => {
+    voiceListeners.delete(listener);
+  };
 }
 
 /**
@@ -200,7 +218,9 @@ class WebSpeechProvider implements TtsProvider {
 
   speak(text: string, options: SpeakOptions): Promise<SpeakResult> {
     const s = synth();
-    if (!s) return Promise.resolve("finished");
+    // There is nothing to speak with. That is a failure, not a finished
+    // utterance, however quiet the difference sounds.
+    if (!s) return Promise.resolve("failed");
 
     this.cancel();
     this.stopped = false;
@@ -234,7 +254,9 @@ class WebSpeechProvider implements TtsProvider {
         // a speech failure would be a lie the user has to see and dismiss.
         const benign = e.error === "canceled" || e.error === "interrupted";
         if (!benign && !this.stopped) options.onError?.(e.error || "speech-failed");
-        finish("finished");
+        // Only a stop we asked for, or the platform's own cancel/interrupt,
+        // ends "finished". A real error did not speak.
+        finish(benign ? "finished" : "failed");
       };
       if (options.onBoundary) {
         utterance.onboundary = (e) => options.onBoundary?.(e.charIndex);

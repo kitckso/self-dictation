@@ -35,6 +35,53 @@ describe("toSentences", () => {
 
   it("keeps initials with the name that follows them", () => {
     expect(toSentences("J. R. Tolkien wrote it.")).toEqual(["J. R. Tolkien wrote it."]);
+    // An unspaced run of initials is still a name, not a sentence end.
+    expect(toSentences("J.R.R. Tolkien wrote it.")).toEqual(["J.R.R. Tolkien wrote it."]);
+  });
+
+  it("lets a dotted abbreviation end a sentence when a new one follows", () => {
+    // The last dot of the run is the one that can end it, and the next word
+    // decides whether it does — the same rule as "etc.".
+    expect(toSentences("I live in the U.S. It is large.")).toEqual([
+      "I live in the U.S.",
+      "It is large.",
+    ]);
+    expect(toSentences("It is 9 a.m. The meeting starts.")).toEqual([
+      "It is 9 a.m.",
+      "The meeting starts.",
+    ]);
+  });
+
+  it("keeps a dotted abbreviation inside a sentence when a small word follows", () => {
+    expect(toSentences("I live in the U.S. today.")).toEqual(["I live in the U.S. today."]);
+    expect(toSentences("It is 9 a.m. today.")).toEqual(["It is 9 a.m. today."]);
+  });
+
+  it("recognises a dotted abbreviation whose parts are longer than one letter", () => {
+    expect(toSentences("He earned a Ph.D. Then he left.")).toEqual([
+      "He earned a Ph.D.",
+      "Then he left.",
+    ]);
+    expect(toSentences("She has an M.Sc. in physics.")).toEqual([
+      "She has an M.Sc. in physics.",
+    ]);
+  });
+
+  it("lets a suffix end a sentence but not cut a name in half", () => {
+    expect(toSentences("John Smith Jr. Then he left.")).toEqual([
+      "John Smith Jr.",
+      "Then he left.",
+    ]);
+    expect(toSentences("John Smith Jr. is here.")).toEqual(["John Smith Jr. is here."]);
+  });
+
+  it("tells a street from a saint", () => {
+    // After a capitalised name, "St." is Street and can end a sentence.
+    expect(toSentences("Main St. Then he left.")).toEqual(["Main St.", "Then he left."]);
+    expect(toSentences("Main St. is closed.")).toEqual(["Main St. is closed."]);
+    // Without one, it is Saint, and the name after it belongs to the same
+    // sentence.
+    expect(toSentences("St. John is here.")).toEqual(["St. John is here."]);
   });
 
   it("treats a single capital letter as an initial but a small one as a word", () => {
@@ -74,6 +121,11 @@ describe("toSentences", () => {
   it("keeps an ellipsis together rather than chopping it up", () => {
     // An ellipsis is one pause, and belongs to the sentence it ends.
     expect(toSentences("Wait... what now?")).toEqual(["Wait...", "what now?"]);
+  });
+
+  it("keeps a closing mark after an ellipsis with the sentence it closes", () => {
+    expect(toSentences('"Wait..." Then he left.')).toEqual(['"Wait..."', "Then he left."]);
+    expect(toSentences('"Wait..."')).toEqual(['"Wait..."']);
   });
 
   it("splits a numbered list into its items", () => {

@@ -46,6 +46,11 @@ function defaultAnswerOn(lang: LanguageId): AnswerOn {
   return lang === "en" ? "typed" : "paper";
 }
 
+/** What to say when the voice did not finish. */
+function failureReason(result: "cut-off" | "failed"): string {
+  return result === "cut-off" ? "the voice stopped before it finished" : "the browser refused to speak";
+}
+
 /**
  * Every Chunk visible as a numbered slot so you can see how much is left
  * without seeing a word of it.
@@ -133,13 +138,22 @@ export function Run({ run, onFinish }: Props) {
           setCursor(step.index);
           setSpeaking(step.index);
           setSpeechError(null);
-          await webSpeech.speak(chunks[step.index] ?? "", {
+          const heard = await webSpeech.speak(chunks[step.index] ?? "", {
             lang: tag,
             rate: settings.current.rate,
             onError: (reason) => {
               if (mine()) setSpeechError(reason);
             },
           });
+          if (!mine()) return;
+          // A voice that never spoke, or stopped half-way, is not progress.
+          // Carrying on would walk the cursor to the end in silence.
+          if (heard !== "finished") {
+            setSpeechError((prev) => prev ?? failureReason(heard));
+            setSpeaking(null);
+            setAuto(false);
+            return;
+          }
         }
       }
       if (!mine()) return;
@@ -181,11 +195,15 @@ export function Run({ run, onFinish }: Props) {
     setSpeaking(i);
     setSpeechError(null);
     try {
-      await webSpeech.speak(run.chunks[i] ?? "", {
+      const heard = await webSpeech.speak(run.chunks[i] ?? "", {
         lang: tag,
         rate: settings.current.rate,
         onError: (reason) => setSpeechError(reason),
       });
+      if (gen === playGen.current && heard !== "finished") {
+        // A reason from onError is more specific than the general one.
+        setSpeechError((prev) => prev ?? failureReason(heard));
+      }
     } finally {
       if (gen === playGen.current) setSpeaking(null);
     }

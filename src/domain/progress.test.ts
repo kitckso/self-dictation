@@ -5,6 +5,7 @@ import {
   drillText,
   groupByLanguage,
   itemProgress,
+  pickRandom,
   runText,
   summarise,
   weaknesses,
@@ -83,11 +84,15 @@ describe("itemProgress", () => {
 
     const library = progress.find((p) => p.text === "圖書館")!;
     expect(library.answered).toBe(1);
+    expect(library.correct).toBe(1);
+    expect(library.partial).toBe(0);
     expect(library.wrong).toBe(0);
     expect(library.lastWrong).toBe(false);
 
     const hospital = progress.find((p) => p.text === "醫院")!;
     expect(hospital.answered).toBe(1);
+    expect(hospital.correct).toBe(0);
+    expect(hospital.partial).toBe(0);
     expect(hospital.wrong).toBe(1);
     expect(hospital.lastWrong).toBe(true);
   });
@@ -145,6 +150,8 @@ describe("itemProgress", () => {
     const library = progress.find((p) => p.text === "圖書館")!;
 
     expect(library.answered).toBe(2);
+    expect(library.correct).toBe(0);
+    expect(library.partial).toBe(1);
     expect(library.wrong).toBe(1);
     expect(library.lastWrong).toBe(true);
   });
@@ -261,6 +268,8 @@ describe("drillText", () => {
         language: "zh",
         mode: "vocab",
         answered: 1,
+        correct: 0,
+        partial: 0,
         wrong: 1,
         lastWrong: true,
         lastSeen: 0,
@@ -270,6 +279,8 @@ describe("drillText", () => {
         language: "zh",
         mode: "vocab",
         answered: 1,
+        correct: 0,
+        partial: 0,
         wrong: 1,
         lastWrong: true,
         lastSeen: 0,
@@ -277,6 +288,33 @@ describe("drillText", () => {
     ]);
 
     expect(text).toBe("圖書館\n醫院");
+  });
+});
+
+describe("pickRandom", () => {
+  it("takes the asked-for number of items without repeats", () => {
+    const items = ["a", "b", "c", "d", "e", "f", "g"];
+
+    const picked = pickRandom(items, 5);
+
+    expect(picked).toHaveLength(5);
+    expect(new Set(picked).size).toBe(5);
+    expect(picked.every((item) => items.includes(item))).toBe(true);
+  });
+
+  it("takes everything when there is no more to take", () => {
+    expect(pickRandom(["a", "b"], 5)).toHaveLength(2);
+    expect(pickRandom([], 5)).toEqual([]);
+  });
+
+  it("draws from the whole list, not only its front", () => {
+    // A fixed "random" of almost 1 always swaps in the last item, so the draw
+    // must be able to reach past the first few.
+    const items = ["a", "b", "c", "d", "e", "f", "g"];
+
+    const picked = pickRandom(items, 5, () => 0.99);
+
+    expect(picked).toContain("g");
   });
 });
 
