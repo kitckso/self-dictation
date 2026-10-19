@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
 import type { Run } from "./domain/types";
-import { listCollections, listRuns, saveRun } from "./storage/db";
+import { listCollections, listAllRuns, saveRun } from "./storage/db";
 
 vi.mock("./tts", () => ({
   isSupported: () => true,
@@ -38,7 +38,7 @@ vi.mock("./storage/db", () => ({
   saveCollection: vi.fn().mockResolvedValue(undefined),
   deleteCollection: vi.fn().mockResolvedValue(undefined),
   saveRun: vi.fn(saveRunImpl),
-  listRuns: vi.fn(async () => store.runs),
+  listAllRuns: vi.fn(async () => store.runs),
   deleteRun: vi.fn().mockResolvedValue(undefined),
   clearRuns: vi.fn().mockResolvedValue(undefined),
 }));
@@ -64,7 +64,7 @@ afterEach(() => {
   // set, so a test that made a write fail would otherwise make every test
   // after it fail to save.
   vi.mocked(saveRun).mockImplementation(saveRunImpl);
-  vi.mocked(listRuns).mockImplementation(async () => store.runs);
+  vi.mocked(listAllRuns).mockImplementation(async () => store.runs);
   vi.mocked(listCollections).mockResolvedValue([]);
 });
 
@@ -215,7 +215,7 @@ describe("App", () => {
   });
 
   it("starts a drill from the past runs at Setup, with the material filled in", async () => {
-    vi.mocked(listRuns).mockResolvedValue([
+    vi.mocked(listAllRuns).mockResolvedValue([
       {
         id: "r1",
         collectionId: null,

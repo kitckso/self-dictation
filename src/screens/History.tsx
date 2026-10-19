@@ -9,7 +9,15 @@ import {
   type ItemProgress,
 } from "../domain/progress";
 import { languageById, type Run, type SetupFill } from "../domain/types";
-import { clearRuns, deleteRun, listRuns } from "../storage/db";
+import { clearRuns, deleteRun, listAllRuns } from "../storage/db";
+
+/**
+ * How many past Runs the screen lists.
+ *
+ * Progress still works out of every Run there is: this is only about how many
+ * of them the list shows.
+ */
+const PAST_RUNS_SHOWN = 20;
 
 interface Props {
   onBack: () => void;
@@ -41,7 +49,7 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
   const [unreadable, setUnreadable] = useState(false);
 
   useEffect(() => {
-    void listRuns()
+    void listAllRuns()
       .then(setRuns)
       .catch(() => {
         // The store cannot be read, and a blocked store will not fix itself.
@@ -155,7 +163,7 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
               </p>
             ) : (
               <div className="saved">
-                {summaries.map(({ run, score, answered }) => (
+                {summaries.slice(0, PAST_RUNS_SHOWN).map(({ run, score, answered }) => (
                   <div className="saved-row" key={run.id}>
                     <span className="chip">{languageById(run.language).label}</span>
                     <span className="nm">
@@ -182,6 +190,12 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
                   </div>
                 ))}
               </div>
+            )}
+            {summaries.length > PAST_RUNS_SHOWN && (
+              <p className="note">
+                {summaries.length - PAST_RUNS_SHOWN} older runs are not listed, but they still count
+                towards what needs practice.
+              </p>
             )}
           </section>
 

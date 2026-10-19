@@ -2,11 +2,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Run } from "../domain/types";
-import { clearRuns, deleteRun, listRuns } from "../storage/db";
+import { clearRuns, deleteRun, listAllRuns } from "../storage/db";
 import { History } from "./History";
 
 vi.mock("../storage/db", () => ({
-  listRuns: vi.fn().mockResolvedValue([]),
+  listAllRuns: vi.fn().mockResolvedValue([]),
   deleteRun: vi.fn().mockResolvedValue(undefined),
   clearRuns: vi.fn().mockResolvedValue(undefined),
 }));
@@ -38,7 +38,7 @@ afterEach(() => {
   vi.clearAllMocks();
   // clearAllMocks empties the calls but leaves the implementation a test set,
   // so each test has to put the empty list back or it inherits the last one.
-  vi.mocked(listRuns).mockResolvedValue([]);
+  vi.mocked(listAllRuns).mockResolvedValue([]);
 });
 
 describe("History", () => {
@@ -49,7 +49,7 @@ describe("History", () => {
   });
 
   it("lists a past Run with the score it got", async () => {
-    vi.mocked(listRuns).mockResolvedValue([
+    vi.mocked(listAllRuns).mockResolvedValue([
       makeRun({
         results: [
           { index: 0, transcript: "圖書館", outcome: null },
@@ -65,7 +65,7 @@ describe("History", () => {
   });
 
   it("shows the material that went wrong, so it can be practised again", async () => {
-    vi.mocked(listRuns).mockResolvedValue([
+    vi.mocked(listAllRuns).mockResolvedValue([
       makeRun({
         results: [
           { index: 0, transcript: "", outcome: "wrong" },
@@ -82,7 +82,7 @@ describe("History", () => {
   });
 
   it("drills the material that needs practice, in the language it is written in", async () => {
-    vi.mocked(listRuns).mockResolvedValue([
+    vi.mocked(listAllRuns).mockResolvedValue([
       makeRun({
         language: "yue",
         results: [
@@ -104,7 +104,7 @@ describe("History", () => {
   it("keeps each language's material in its own drill", async () => {
     // A Run speaks one Language, so Cantonese and Mandarin cannot be drilled
     // together.
-    vi.mocked(listRuns).mockResolvedValue([
+    vi.mocked(listAllRuns).mockResolvedValue([
       makeRun({
         id: "r1",
         language: "yue",
@@ -131,7 +131,7 @@ describe("History", () => {
   });
 
   it("offers the material of a past Run to be practised again", async () => {
-    vi.mocked(listRuns).mockResolvedValue([makeRun()]);
+    vi.mocked(listAllRuns).mockResolvedValue([makeRun()]);
     const onDrill = vi.fn();
     renderHistory({ onDrill });
 
@@ -143,7 +143,7 @@ describe("History", () => {
   });
 
   it("forgets a single Run", async () => {
-    vi.mocked(listRuns).mockResolvedValue([makeRun()]);
+    vi.mocked(listAllRuns).mockResolvedValue([makeRun()]);
     renderHistory();
 
     fireEvent.click(await screen.findByRole("button", { name: /Forget the run of Lesson 1/ }));
@@ -153,13 +153,53 @@ describe("History", () => {
   });
 
   it("forgets every Run at once", async () => {
-    vi.mocked(listRuns).mockResolvedValue([makeRun()]);
+    vi.mocked(listAllRuns).mockResolvedValue([makeRun()]);
     renderHistory();
 
     fireEvent.click(await screen.findByRole("button", { name: /Forget every run/i }));
 
     expect(clearRuns).toHaveBeenCalled();
     expect(await screen.findByText(/nothing yet/i)).toBeTruthy();
+  });
+
+  it("sees every Run, not just the newest few", async () => {
+    // Progress is worked out from every Run there is, so a Weakness from an
+    // old Run does not quietly disappear once there are more than twenty.
+    const many: Run[] = [];
+    for (let i = 0; i < 25; i++) {
+      many.push(
+        makeRun({
+          id: `r${i}`,
+          startedAt: 1_000 + i,
+          chunks: ["routine"],
+          results: [{ index: 0, transcript: "", outcome: "correct" }],
+        }),
+      );
+    }
+    // The oldest Run of all is the one that went wrong.
+    many.unshift(
+      makeRun({
+        id: "oldest",
+        startedAt: 0,
+        chunks: ["old-weakness"],
+        results: [{ index: 0, transcript: "", outcome: "wrong" }],
+      }),
+    );
+    vi.mocked(listAllRuns).mockResolvedValue(many);
+    renderHistory();
+
+    expect(await screen.findByText("old-weakness")).toBeTruthy();
+  });
+
+  it("lists the newest Runs and says how many older ones it is leaving out", async () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      makeRun({ id: `r${i}`, title: `Lesson ${i}`, startedAt: 25 - i }),
+    );
+    vi.mocked(listAllRuns).mockResolvedValue(many);
+    renderHistory();
+
+    expect(await screen.findByText(/5 older runs are not listed/i)).toBeTruthy();
+    expect(screen.queryByText(/Lesson 24/)).toBeNull();
   });
 
   it("goes back to a new dictation", async () => {
@@ -173,7 +213,7 @@ describe("History", () => {
 
   describe("when the store cannot be read", () => {
     it("says so rather than waiting for ever", async () => {
-      vi.mocked(listRuns).mockRejectedValue(new Error("blocked"));
+      vi.mocked(listAllRuns).mockRejectedValue(new Error("blocked"));
       renderHistory();
 
       expect(await screen.findByText(/could not be read/i)).toBeTruthy();
@@ -182,7 +222,7 @@ describe("History", () => {
     it("still offers a way out", async () => {
       // A blocked store will not fix itself, so a screen that only waits for
       // it leaves the person stuck until they reload.
-      vi.mocked(listRuns).mockRejectedValue(new Error("blocked"));
+      vi.mocked(listAllRuns).mockRejectedValue(new Error("blocked"));
       const onBack = vi.fn();
       renderHistory({ onBack });
 
@@ -192,7 +232,7 @@ describe("History", () => {
     });
 
     it("tells the app that the store is broken", async () => {
-      vi.mocked(listRuns).mockRejectedValue(new Error("blocked"));
+      vi.mocked(listAllRuns).mockRejectedValue(new Error("blocked"));
       const onStorageFail = vi.fn();
       renderHistory({ onStorageFail });
 

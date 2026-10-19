@@ -184,7 +184,7 @@ describe("runs", () => {
 
     await db.saveRun(makeRun());
 
-    expect(await db.listRuns()).toHaveLength(1);
+    expect(await db.listAllRuns()).toHaveLength(1);
   });
 
   it("gives the newest Run first", async () => {
@@ -193,7 +193,16 @@ describe("runs", () => {
     await db.saveRun(makeRun({ id: "old", startedAt: 1_000 }));
     await db.saveRun(makeRun({ id: "new", startedAt: 5_000 }));
 
-    expect((await db.listRuns()).map((r) => r.id)).toEqual(["new", "old"]);
+    expect((await db.listAllRuns()).map((r) => r.id)).toEqual(["new", "old"]);
+  });
+
+  it("gives back every Run, not just the newest twenty", async () => {
+    const db = await store();
+    for (let i = 0; i < 25; i++) {
+      await db.saveRun(makeRun({ id: `r${i}`, startedAt: 1_000 + i }));
+    }
+
+    expect(await db.listAllRuns()).toHaveLength(25);
   });
 
   it("forgets one Run without touching the others", async () => {
@@ -203,7 +212,7 @@ describe("runs", () => {
 
     await db.deleteRun("r1");
 
-    expect((await db.listRuns()).map((r) => r.id)).toEqual(["r2"]);
+    expect((await db.listAllRuns()).map((r) => r.id)).toEqual(["r2"]);
   });
 
   it("forgets every Run at once", async () => {
@@ -213,7 +222,7 @@ describe("runs", () => {
 
     await db.clearRuns();
 
-    expect(await db.listRuns()).toEqual([]);
+    expect(await db.listAllRuns()).toEqual([]);
   });
 });
 
@@ -222,20 +231,20 @@ describe("a store that cannot be opened", () => {
     const db = await store();
     openFails = true;
 
-    await expect(db.listRuns()).rejects.toThrow("blocked");
+    await expect(db.listAllRuns()).rejects.toThrow("blocked");
   });
 
   it("is not remembered for the life of the page", async () => {
     const db = await store();
     openFails = true;
-    await expect(db.listRuns()).rejects.toThrow("blocked");
+    await expect(db.listAllRuns()).rejects.toThrow("blocked");
 
     // A store blocked in one tab, or a private window that has just been
     // allowed, may well work on the next attempt. Caching the failure would
     // make it permanent for everyone still in this tab.
     openFails = false;
 
-    expect(await db.listRuns()).toEqual([]);
+    expect(await db.listAllRuns()).toEqual([]);
     expect(openCalls).toBe(2);
   });
 });

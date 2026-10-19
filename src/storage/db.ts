@@ -70,9 +70,16 @@ export async function deleteCollection(id: string): Promise<void> {
   await tx(COLLECTIONS, "readwrite", (s) => s.delete(id));
 }
 
-export async function listRuns(limit = 20): Promise<Run[]> {
+/**
+ * Every Run, newest first.
+ *
+ * Progress is a property of the material rather than of a Run, so it has to be
+ * worked out from every Run there is. A limit here would quietly drop the
+ * oldest Weaknesses, which are often the ones that still need the work.
+ */
+export async function listAllRuns(): Promise<Run[]> {
   const all = await tx<Run[]>(RUNS, "readonly", (s) => s.getAll());
-  return all.sort((a, b) => b.startedAt - a.startedAt).slice(0, limit);
+  return all.sort((a, b) => b.startedAt - a.startedAt);
 }
 
 export async function saveRun(r: Run): Promise<void> {
