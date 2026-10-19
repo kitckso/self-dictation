@@ -35,6 +35,19 @@ function byLength(parts: string[]): string[] {
 }
 
 /**
+ * Tidy pasted Vocabulary text: trim each line, drop blank lines, and collapse
+ * runs of spaces or tabs inside a line. Line breaks are kept — they are what
+ * separates one Vocabulary Item from the next.
+ */
+export function formatVocabText(text: string): string {
+  return text
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.replace(/[ \t\u3000]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
  * Turn a Passage into the Chunks that get spoken one at a time.
  *
  * Vocabulary mode is one item per line — a Vocabulary Item is simply a very

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { toChunks } from "../domain/chunking";
+import { formatVocabText, toChunks } from "../domain/chunking";
 import { LANGUAGES, languageById, type LanguageId, type Mode } from "../domain/types";
 import { isSupported, webSpeech } from "../tts";
 import type { VoiceOption } from "../tts";
@@ -204,6 +204,16 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {mode === "vocab" && (
+            <button
+              className="rowbtn"
+              disabled={!text.trim()}
+              onClick={() => setText(formatVocabText(text))}
+              title="Trim spaces, drop blank lines"
+            >
+              format
+            </button>
+          )}
           <button className="rowbtn" onClick={() => setText(SAMPLES[mode][language])}>
             load sample
           </button>

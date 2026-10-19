@@ -54,7 +54,8 @@ Screen", or host `dist/` on any static host.
 
 **Paragraph** mode splits on sentence boundaries (`。！？` / `.?!`), falling back
 to clause punctuation (`，、；`) for long sentences, capped at 70 characters.
-**Vocabulary** mode takes one item per line.
+**Vocabulary** mode takes one item per line. The **format** button tidies pasted
+text — it trims each line, drops blank lines, and collapses runs of spaces.
 
 ## Language support depends on your device
 

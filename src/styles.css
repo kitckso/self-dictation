@@ -211,6 +211,7 @@ h2 {
 }
 .btn:disabled,
 .rail-btn:disabled,
+.rowbtn:disabled,
 .mark:disabled {
   opacity: 0.4;
 }
