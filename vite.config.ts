@@ -7,6 +7,10 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   fmt: {},
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+  },
   plugins: [
     react(),
     VitePWA({

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { draftTitle, findCollectionByTitle, planCollectionSave } from "../domain/collections";
 import { formatVocabText, toChunks } from "../domain/chunking";
 import { LANGUAGES, languageById, type LanguageId, type Mode } from "../domain/types";
 import { isSupported, webSpeech } from "../tts";
@@ -48,14 +49,6 @@ function hasVoiceFor(voices: VoiceOption[], id: LanguageId): boolean {
   });
 }
 
-/**
- * Whether two Collection titles name the same saved Collection. Titles are the
- * only handle the person has, so matching ignores surrounding space and case.
- */
-function sameTitle(a: string, b: string): boolean {
-  return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
-}
-
 export function Setup({ onStart, voices, canEnumerate }: Props) {
   const [language, setLanguage] = useState<LanguageId>("yue");
   const [mode, setMode] = useState<Mode>("paragraph");
@@ -90,26 +83,16 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
   const chunks = useMemo(() => toChunks(text, mode, language), [text, mode, language]);
   const canStart = chunks.length > 0;
 
-  const nextTitle = title.trim() || `Untitled ${mode}`;
-  const existing = useMemo(
-    () => collections.find((c) => sameTitle(c.title, nextTitle)) ?? null,
-    [collections, nextTitle],
+  const saved = useMemo(
+    () => findCollectionByTitle(collections, draftTitle(title, mode)),
+    [collections, title, mode],
   );
 
   async function save() {
     if (!canStart) return;
-    const now = Date.now();
-    // Same title means same Collection: drilling a sample again should refresh
-    // the saved material, not pile up identical rows.
-    const c: Collection = {
-      id: existing?.id ?? newId(),
-      title: nextTitle,
-      language,
-      mode,
-      text,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
+    // Same title means same Collection: drilling a sample again refreshes the
+    // saved material instead of piling up identical rows.
+    const c = planCollectionSave(collections, { title, language, mode, text }, Date.now(), newId);
     // Persistence is a convenience, never a precondition — a failed write
     // (private mode, quota, insecure context) must not stop the dictation.
     let stored = true;
@@ -279,8 +262,8 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
       </button>
       {canStart && (
         <p className="note" style={{ textAlign: "center" }}>
-          {existing
-            ? `Updates the saved collection “${existing.title}”.`
+          {saved
+            ? `Updates the saved collection “${saved.title}”.`
             : "Saves to this browser so you can drill it again."}
         </p>
       )}

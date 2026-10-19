@@ -38,6 +38,7 @@ npm run dev            # local only
 npm run dev -- --host  # reachable from a phone on your network
 npm run build
 npm run preview
+npm test               # domain unit tests
 ```
 
 To use it on a phone, install it as a PWA from your browser's "Add to Home
