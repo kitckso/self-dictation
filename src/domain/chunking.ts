@@ -12,6 +12,8 @@ const CJK = /[㐀-鿿豈-﫿]/;
 /** Chinese sentence enders, English ones, and their full-width forms. */
 const SENTENCE_END = new Set(["。", "！", "？", "!", "?", "．", "."]);
 const CLAUSE_END = new Set(["，", "、", "；", ",", ";", "：", ":"]);
+/** The same enders, for the Latin path, which splits on them one by one. */
+const LATIN_END = new Set([".", "!", "?"]);
 
 /** Split after the given punctuation, keeping it attached to the left part. */
 function splitAfter(text: string, enders: Set<string>): string[] {
@@ -51,7 +53,8 @@ export function formatVocabText(text: string): string {
  * Turn a Passage into the Chunks that get spoken one at a time.
  *
  * Vocabulary mode is one item per line — a Vocabulary Item is simply a very
- * short Passage. Paragraph mode splits on sentence boundaries, with a
+ * short Passage, so a line that turns out to be longer than a Chunk is one
+ * again. Paragraph mode splits on sentence boundaries, with a
  * clause-level fallback for over-long sentences.
  */
 export function toChunks(text: string, mode: Mode, _language: LanguageId): string[] {
@@ -59,7 +62,8 @@ export function toChunks(text: string, mode: Mode, _language: LanguageId): strin
     return text
       .split("\n")
       .map((line) => line.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .flatMap(wrapItem);
   }
 
   const trimmed = text.trim();
@@ -69,27 +73,48 @@ export function toChunks(text: string, mode: Mode, _language: LanguageId): strin
     return byLength(splitAfter(trimmed, SENTENCE_END)).filter(Boolean);
   }
 
-  // Latin script: split on sentence enders, but not on the dot in "Mr." / "3.5".
+  // Latin script: split on sentence enders.
   const sentences = trimmed
     .split(/(?<=[.!?])\s+/)
-    .flatMap((s) => (isAbbreviation(s) ? [s] : s))
     .map((s) => s.trim())
     .filter(Boolean);
 
   // The lookbehind split can't see "end.Next" with no space, so guard it.
   const repaired = sentences.flatMap((s) =>
-    splitAfter(s, new Set([".", "!", "?"])).length > 1
-      ? splitAfter(s, new Set([".", "!", "?"]))
-      : [s],
+    splitAfter(s, LATIN_END).length > 1 ? splitAfter(s, LATIN_END) : [s],
   );
 
   return byLength(repaired).filter(Boolean);
 }
 
-const ABBREVIATION = /\b(mr|mrs|ms|dr|prof|jr|sr|st|vs|etc|e\.g|i\.e|no)\.$/i;
+/**
+ * Break a Vocabulary Item that is over the cap back into Chunks, cutting on a
+ * space where there is one so that a word is never split down the middle.
+ *
+ * CHUNK_CHAR_CAP bounds a Chunk for a reason: Grading builds a table quadratic
+ * in its length, and Results draws one node per character. An item longer than
+ * the cap is usually a whole sentence pasted into the wrong column, so splitting
+ * it is more useful than refusing to start.
+ */
+function wrapItem(line: string): string[] {
+  if ([...line].length <= CHUNK_CHAR_CAP) return [line];
 
-function isAbbreviation(sentence: string): boolean {
-  return ABBREVIATION.test(sentence);
+  const out: string[] = [];
+  let rest = [...line];
+  while (rest.length > CHUNK_CHAR_CAP) {
+    // Index CHUNK_CHAR_CAP itself is the hard cut; look one past it for a space.
+    let cut = CHUNK_CHAR_CAP;
+    for (let i = CHUNK_CHAR_CAP; i > 0; i--) {
+      if (/\s/.test(rest[i] ?? "")) {
+        cut = i;
+        break;
+      }
+    }
+    out.push(rest.slice(0, cut).join("").trim());
+    rest = rest.slice(cut);
+  }
+  if (rest.join("").trim()) out.push(rest.join("").trim());
+  return out.filter(Boolean);
 }
 
 /** Characters that count toward Grading, ignoring what people don't control. */
