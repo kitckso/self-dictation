@@ -25,8 +25,8 @@ export interface ItemProgress {
   /**
    * Whether the most recent answer went wrong.
    *
-   * Skipping a Chunk does not clear this - not doing it says nothing about
-   * whether it can be done. Answering it correctly does.
+   * Only a correct answer clears this. A partial one is half a right answer,
+   * and skipping says nothing at all: either way the material is still hard.
    */
   lastWrong: boolean;
   /** When it was last practised. */
@@ -114,7 +114,10 @@ export function itemProgress(runs: Run[]): ItemProgress[] {
       if (answer !== "none") {
         seen.answered++;
         if (answer === "wrong") seen.wrong++;
-        seen.lastWrong = answer === "wrong";
+        // Only a correct answer clears a Weakness. A partial one is half a
+        // right answer: it says the material is still hard, which is what a
+        // Weakness is for. Skipping leaves it exactly as it was.
+        seen.lastWrong = answer !== "right";
       }
       seen.lastSeen = Math.max(seen.lastSeen, run.startedAt);
 

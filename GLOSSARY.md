@@ -128,10 +128,10 @@ so it outlives the Run that established it.
 _Avoid_: Stats, history, record, analytics
 
 **Weakness**:
-Material whose most recent Outcome was wrong, and which is therefore worth
-practising again. A Weakness is cleared by answering the material correctly,
-but not by skipping it — not doing it says nothing about whether it can be
-done.
+Material whose most recent answer went wrong, and which is therefore worth
+practising again. Only a correct answer clears it. A partial answer and
+skipping it both leave it standing: neither says the material can be done,
+and "not yet right" is what a Weakness is.
 _Avoid_: Mistake, error, wrong answer, gap
 
 **Drill**:

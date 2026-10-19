@@ -128,6 +128,27 @@ describe("itemProgress", () => {
     expect(library.answered).toBe(1);
   });
 
+  it("keeps a piece of material a Weakness when the latest answer is only partial", () => {
+    // A partial answer is not yet a right one: it says the material is still
+    // hard, which is what a Weakness is for.
+    const older = makeRun({
+      startedAt: 1_000,
+      results: results({ index: 0, outcome: "wrong" }, { index: 1, outcome: "correct" }),
+    });
+    const newer = makeRun({
+      id: "r2",
+      startedAt: 5_000,
+      results: results({ index: 0, outcome: "partial" }, { index: 1, outcome: "correct" }),
+    });
+
+    const progress = itemProgress([older, newer]);
+    const library = progress.find((p) => p.text === "圖書館")!;
+
+    expect(library.answered).toBe(2);
+    expect(library.wrong).toBe(1);
+    expect(library.lastWrong).toBe(true);
+  });
+
   it("reads the Runs oldest first however they are given", () => {
     const older = makeRun({ startedAt: 1_000, results: results({ index: 0, outcome: "wrong" }) });
     const newer = makeRun({
