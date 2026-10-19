@@ -1,4 +1,4 @@
-import type { LanguageId, Mode } from "./types";
+import type { Mode } from "./types";
 
 /**
  * Longest a single Chunk may be. Chinese and English are chunked on sentence
@@ -56,8 +56,12 @@ export function formatVocabText(text: string): string {
  * short Passage, so a line that turns out to be longer than a Chunk is one
  * again. Paragraph mode splits on sentence boundaries, with a
  * clause-level fallback for over-long sentences.
+ *
+ * Which of those applies is decided by what the text looks like, not by the
+ * Language it was filed under: a Cantonese Passage written in Latin letters is
+ * split on Latin sentence enders, because there are no CJK ones to find.
  */
-export function toChunks(text: string, mode: Mode, _language: LanguageId): string[] {
+export function toChunks(text: string, mode: Mode): string[] {
   if (mode === "vocab") {
     return text
       .split("\n")

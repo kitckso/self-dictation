@@ -546,6 +546,17 @@ dialog.share::backdrop {
 .share-link:focus {
   border-color: var(--accent);
 }
+/**
+ * Those three fields drop the browser's own outline and mark focus with a
+ * one-pixel border shift alone. That is easy to miss on a dark background, so
+ * keyboard focus also gets a ring — the border is kept for everyone else.
+ */
+.box:focus-visible,
+.answer:focus-visible,
+.share-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .share-actions {
   display: flex;
   gap: 8px;

@@ -107,7 +107,7 @@ export function Run({ run, onFinish }: Props) {
 
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-slot="${cursor}"]`);
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    el?.scrollIntoView({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
   }, [cursor]);
 
   useEffect(() => {
@@ -245,6 +245,9 @@ export function Run({ run, onFinish }: Props) {
             className={`slot${i === cursor ? " now" : ""}`}
             data-slot={i}
             key={i}
+            // A pointer shortcut for moving the cursor. It is deliberately not
+            // focusable: the rail's up/down buttons already do this by keyboard,
+            // and one tab stop per Chunk would bury the controls that matter.
             onClick={() => focusSlot(i)}
           >
             <header>
@@ -268,6 +271,9 @@ export function Run({ run, onFinish }: Props) {
                 <textarea
                   className="answer"
                   rows={1}
+                  // Without this a screen reader hears N identical fields and
+                  // no way to tell which Chunk is which.
+                  aria-label={`Answer for chunk ${i + 1}`}
                   placeholder="type what you hear"
                   value={transcripts[i] ?? ""}
                   onChange={(e) => setTranscripts((prev) => ({ ...prev, [i]: e.target.value }))}
@@ -359,10 +365,22 @@ export function Run({ run, onFinish }: Props) {
           >
             {playing ? "■" : "▶"}
           </button>
-          <button className="rail-btn" onClick={back} disabled={cursor === 0}>
+          <button
+            className="rail-btn"
+            aria-label="Previous chunk"
+            title="Previous chunk"
+            onClick={back}
+            disabled={cursor === 0}
+          >
             ↑
           </button>
-          <button className="rail-btn" onClick={next} disabled={cursor === run.chunks.length - 1}>
+          <button
+            className="rail-btn"
+            aria-label="Next chunk"
+            title="Next chunk"
+            onClick={next}
+            disabled={cursor === run.chunks.length - 1}
+          >
             ↓
           </button>
           <button
@@ -396,4 +414,12 @@ export function Run({ run, onFinish }: Props) {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Someone who has asked for less motion should not be scrolled smoothly. */
+function reducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
 }

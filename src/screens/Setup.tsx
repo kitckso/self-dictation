@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { draftTitle, findCollectionByTitle, planCollectionSave } from "../domain/collections";
 import { formatVocabText, toChunks } from "../domain/chunking";
 import type { SharedSetup } from "../domain/share";
-import { LANGUAGES, languageById, type LanguageId, type Mode } from "../domain/types";
+import {
+  LANGUAGES,
+  languageById,
+  type LanguageId,
+  type Mode,
+  type StartInput,
+} from "../domain/types";
 import { isSupported, webSpeech } from "../tts";
 import type { VoiceOption } from "../tts";
 import { deleteCollection, listCollections, saveCollection } from "../storage/db";
@@ -11,13 +17,7 @@ import type { Collection } from "../domain/types";
 import { Share } from "./Share";
 
 interface Props {
-  onStart: (input: {
-    title: string;
-    language: LanguageId;
-    mode: Mode;
-    text: string;
-    collectionId: string | null;
-  }) => void;
+  onStart: (input: StartInput) => void;
   voices: VoiceOption[];
   /** null = still loading. */
   canEnumerate: boolean | null;
@@ -98,7 +98,7 @@ export function Setup({
 
   const hasVoice = useMemo(() => hasVoiceFor(voices, language), [language, voices]);
 
-  const chunks = useMemo(() => toChunks(text, mode, language), [text, mode, language]);
+  const chunks = useMemo(() => toChunks(text, mode), [text, mode]);
   const canStart = chunks.length > 0;
   /** Stable identity, so the Share panel does not re-encode on every keystroke. */
   const shareable = useMemo(() => ({ language, mode, title, text }), [language, mode, title, text]);
@@ -277,6 +277,7 @@ export function Setup({
                 </button>
                 <button
                   className="rowbtn"
+                  aria-label={`Delete ${c.title}`}
                   onClick={() =>
                     void deleteCollection(c.id)
                       .then(() => listCollections().then(setCollections))

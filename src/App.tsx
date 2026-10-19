@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toChunks } from "./domain/chunking";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
-import type { LanguageId, Mode, Outcome, Run as RunRecord } from "./domain/types";
+import type { Outcome, Run as RunRecord, StartInput } from "./domain/types";
 import { saveRun } from "./storage/db";
 import { newId } from "./lib/id";
 import { isSupported, webSpeech } from "./tts";
@@ -94,14 +94,8 @@ export default function App() {
     return () => window.removeEventListener("hashchange", readHash);
   }, []);
 
-  function start(input: {
-    title: string;
-    language: LanguageId;
-    mode: Mode;
-    text: string;
-    collectionId: string | null;
-  }) {
-    const chunks = toChunks(input.text, input.mode, input.language);
+  function start(input: StartInput) {
+    const chunks = toChunks(input.text, input.mode);
     if (chunks.length === 0) return;
     setScreen({
       name: "run",

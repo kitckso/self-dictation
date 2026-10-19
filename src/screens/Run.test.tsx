@@ -142,6 +142,37 @@ describe("Run", () => {
     expect(screen.getByRole("button", { name: "Stop" }).textContent).toBe("■");
   });
 
+  it("names the rail arrows, which are glyphs and mean nothing aloud", () => {
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    // Without a label these announce as "upwards arrow" / "downwards arrow".
+    expect(screen.getByRole("button", { name: "Previous chunk" }).textContent).toBe("↑");
+    expect(screen.getByRole("button", { name: "Next chunk" }).textContent).toBe("↓");
+  });
+
+  it("cannot walk past either end of the Passage", () => {
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    const back = screen.getByRole("button", { name: "Previous chunk" });
+    const next = screen.getByRole("button", { name: "Next chunk" });
+
+    expect((back as HTMLButtonElement).disabled).toBe(true);
+    expect((next as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(next);
+    expect((next as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("tells the answer fields apart, since every one of them looks the same", () => {
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /type it/i }));
+
+    // A screen reader would otherwise hear N identical "type what you hear".
+    expect(screen.getByLabelText("Answer for chunk 1")).toBeTruthy();
+    expect(screen.getByLabelText("Answer for chunk 2")).toBeTruthy();
+    expect(screen.getAllByPlaceholderText("type what you hear")).toHaveLength(2);
+  });
+
   it.each([["More repeats"], ["Longer pause"], ["Slower"]])(
     "does not start the Chunk over when %s is tapped mid-play",
     (button) => {

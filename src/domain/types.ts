@@ -44,6 +44,16 @@ export function languageById(id: LanguageId): Language {
   return found;
 }
 
+/** What Setup hands over to begin a Run. */
+export interface StartInput {
+  title: string;
+  language: LanguageId;
+  mode: Mode;
+  text: string;
+  /** Null when the browser could not save the Collection. */
+  collectionId: string | null;
+}
+
 export interface Collection {
   id: string;
   title: string;

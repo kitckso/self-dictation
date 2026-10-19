@@ -30,19 +30,19 @@ describe("formatVocabText", () => {
 describe("toChunks", () => {
   describe("vocabulary mode", () => {
     it("is one item per line", () => {
-      expect(toChunks("圖書館\n醫院\n機場", "vocab", "yue")).toEqual(["圖書館", "醫院", "機場"]);
+      expect(toChunks("圖書館\n醫院\n機場", "vocab")).toEqual(["圖書館", "醫院", "機場"]);
     });
 
     it("ignores surrounding space and blank lines", () => {
-      expect(toChunks("  one  \n\n  two \n", "vocab", "en")).toEqual(["one", "two"]);
+      expect(toChunks("  one  \n\n  two \n", "vocab")).toEqual(["one", "two"]);
     });
 
     it("splits Windows line endings", () => {
-      expect(toChunks("one\r\ntwo", "vocab", "en")).toEqual(["one", "two"]);
+      expect(toChunks("one\r\ntwo", "vocab")).toEqual(["one", "two"]);
     });
 
     it("returns nothing for an empty box", () => {
-      expect(toChunks("   \n\n", "vocab", "en")).toEqual([]);
+      expect(toChunks("   \n\n", "vocab")).toEqual([]);
     });
 
     /**
@@ -55,7 +55,7 @@ describe("toChunks", () => {
     it("splits an item longer than the cap", () => {
       const item = "a".repeat(CHUNK_CHAR_CAP * 2 + 5);
 
-      const chunks = toChunks(item, "vocab", "en");
+      const chunks = toChunks(item, "vocab");
 
       expect(chunks).toHaveLength(3);
       for (const chunk of chunks) {
@@ -66,7 +66,7 @@ describe("toChunks", () => {
     it("joins the pieces back into the item that was pasted", () => {
       const item = "圖".repeat(CHUNK_CHAR_CAP + 30);
 
-      const chunks = toChunks(item, "vocab", "zh");
+      const chunks = toChunks(item, "vocab");
 
       expect(chunks.join("")).toBe(item);
     });
@@ -74,7 +74,7 @@ describe("toChunks", () => {
     it("breaks a long item on a space rather than inside a word", () => {
       const item = Array.from({ length: 40 }, () => "library").join(" ");
 
-      const chunks = toChunks(item, "vocab", "en");
+      const chunks = toChunks(item, "vocab");
 
       expect(chunks.length).toBeGreaterThan(1);
       for (const chunk of chunks) {
@@ -89,20 +89,20 @@ describe("toChunks", () => {
     it("leaves an item at the cap exactly as it was", () => {
       const item = "a".repeat(CHUNK_CHAR_CAP);
 
-      expect(toChunks(item, "vocab", "en")).toEqual([item]);
+      expect(toChunks(item, "vocab")).toEqual([item]);
     });
   });
 
   describe("paragraph mode", () => {
     it("splits Chinese at sentence enders, keeping the punctuation", () => {
-      expect(toChunks("今天天气不错。我打算去公园散步。", "paragraph", "zh")).toEqual([
+      expect(toChunks("今天天气不错。我打算去公园散步。", "paragraph")).toEqual([
         "今天天气不错。",
         "我打算去公园散步。",
       ]);
     });
 
     it("splits English at sentence enders", () => {
-      expect(toChunks("Hello there. How are you?", "paragraph", "en")).toEqual([
+      expect(toChunks("Hello there. How are you?", "paragraph")).toEqual([
         "Hello there.",
         "How are you?",
       ]);
@@ -110,14 +110,14 @@ describe("toChunks", () => {
 
     it("splits a long sentence at clause punctuation", () => {
       const clause = "字".repeat(CHUNK_CHAR_CAP - 1);
-      const chunks = toChunks(`${clause}，${clause}`, "paragraph", "zh");
+      const chunks = toChunks(`${clause}，${clause}`, "paragraph");
       expect(chunks).toHaveLength(2);
       expect(chunks[0]).toBe(`${clause}，`);
       expect(chunks[1]).toBe(clause);
     });
 
     it("returns nothing for an empty passage", () => {
-      expect(toChunks("\n\n", "paragraph", "en")).toEqual([]);
+      expect(toChunks("\n\n", "paragraph")).toEqual([]);
     });
   });
 });
