@@ -1,12 +1,19 @@
+import { useMemo } from "react";
 import { grade, scoreChunk, scoreRun } from "../domain/grading";
-import { languageById, type LanguageId, type Mode, type Outcome } from "../domain/types";
+import {
+  languageById,
+  type ChunkResult,
+  type LanguageId,
+  type Mode,
+  type Outcome,
+} from "../domain/types";
 
 interface Props {
   title: string;
   language: LanguageId;
   mode: Mode;
   chunks: string[];
-  results: { transcript: string; outcome: Outcome | null }[];
+  results: ChunkResult[];
   onMark: (index: number, outcome: Outcome | null) => void;
   onAgain: () => void;
   onSetup: () => void;
@@ -17,15 +24,6 @@ const OUTCOMES: { id: Outcome; label: string }[] = [
   { id: "partial", label: "~ some" },
   { id: "wrong", label: "✗ wrong" },
 ];
-
-/**
- * The Reference split into characters for display: a typed Transcript's hits
- * are plain, its misses and extras flagged. Only used when something was typed —
- * with nothing to compare there is nothing to mark.
- */
-function diffParts(reference: string, transcript: string) {
-  return grade(reference, transcript).parts;
-}
 
 /**
  * The end of a Run: every Reference appears at once, beside what was typed and
@@ -42,11 +40,30 @@ export function Results({
   onAgain,
   onSetup,
 }: Props) {
-  const scores = chunks.map((c, i) =>
-    scoreChunk(c, results[i]?.transcript ?? "", results[i]?.outcome ?? null),
+  /**
+   * Graded once per change, not once per score and once per diff.
+   *
+   * The diff and the score both come out of the same character walk, and every
+   * mark rewrites the whole list — so computing them separately walked each Chunk
+   * twice for every button press.
+   */
+  const graded = useMemo(
+    () =>
+      chunks.map((chunk, i) => {
+        const r = results[i];
+        const transcript = r?.transcript ?? "";
+        if (!transcript.trim()) {
+          // Nothing typed: the score is the self-mark, and there is no diff.
+          return { typed: false, score: scoreChunk(chunk, "", r?.outcome ?? null), parts: null };
+        }
+        const g = grade(chunk, transcript);
+        return { typed: true, score: g.accuracy, parts: g.parts };
+      }),
+    [chunks, results],
   );
-  const overall = scoreRun(scores);
-  const marked = results.filter((r) => r.transcript.trim() || r.outcome).length;
+
+  const overall = scoreRun(graded.map((g) => g.score));
+  const marked = graded.filter((g) => g.typed || g.score !== null).length;
 
   return (
     <div className="pad stack res">
@@ -62,29 +79,32 @@ export function Results({
 
       <div>
         {chunks.map((chunk, i) => {
-          const r = results[i] ?? { transcript: "", outcome: null };
-          const typed = r.transcript.trim().length > 0;
+          const g = graded[i] ?? { typed: false, score: null, parts: null };
+          const r = results[i];
           return (
             <div className="res-item" key={i}>
               <p className="note" style={{ marginBottom: 6 }}>
-                {i + 1} · {typed ? `${Math.round((scores[i] ?? 0) * 100)}% typed` : "on paper"}
+                {i + 1} · {g.typed ? `${Math.round((g.score ?? 0) * 100)}% typed` : "on paper"}
               </p>
               <p className="ref">
-                {typed
-                  ? diffParts(chunk, r.transcript).map((part, k) => (
+                {g.parts
+                  ? g.parts.map((part, k) => (
                       <span key={k} className={`tok ${part.kind}`}>
                         {part.char}
                       </span>
                     ))
                   : chunk}
               </p>
-              {!typed && (
+              {!g.typed && (
                 <div className="mark-row">
                   {OUTCOMES.map((o) => (
                     <button
                       key={o.id}
-                      className={`mark ${r.outcome === o.id ? "on" : ""}`}
-                      onClick={() => onMark(i, r.outcome === o.id ? null : o.id)}
+                      // The mark is the answer, so its state has to be readable
+                      // without seeing which button is lit.
+                      aria-pressed={r?.outcome === o.id}
+                      className={`mark ${r?.outcome === o.id ? "on" : ""}`}
+                      onClick={() => onMark(i, r?.outcome === o.id ? null : o.id)}
                     >
                       {o.label}
                     </button>
