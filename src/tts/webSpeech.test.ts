@@ -154,6 +154,37 @@ describe("the voice list", () => {
 
     expect(await webSpeech.canEnumerateVoices()).toBe(false);
   });
+
+  it("reads the list again later, once an empty one has gone stale", async () => {
+    vi.useFakeTimers();
+    try {
+      const webSpeech = await provider();
+
+      // Nothing ever arrives, and the wait gives up.
+      const first = webSpeech.listVoices();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await first).toEqual([]);
+
+      // Straight away it is remembered, so a burst of utterances does not each
+      // wait two seconds for nothing.
+      const remembered = synth.reads;
+      await webSpeech.listVoices();
+      expect(synth.reads).toBe(remembered);
+
+      // But an empty list is not believed for the life of the page. A voice
+      // installed after setup has to be found without a reload.
+      synth.voices = [voice("Siri", "en-GB")];
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      const again = webSpeech.listVoices();
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(await again).toHaveLength(1);
+      expect(synth.reads).toBeGreaterThan(remembered);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 /** The parts of an utterance the provider reaches for. */

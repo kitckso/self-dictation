@@ -56,10 +56,23 @@ let voicesCache: SpeechSynthesisVoice[] | null = null;
 let voicesRead: Promise<SpeechSynthesisVoice[]> | null = null;
 /** The platform's change-notice listener, attached once for the page's life. */
 let watching = false;
+/** When an empty list was found, or 0 if there has not been one. */
+let emptyVoicesAt = 0;
+
+/**
+ * How long an empty voice list is trusted before it is read again.
+ *
+ * An empty list usually means "not ready yet" rather than "there are none".
+ * It is remembered for a while, so that a burst of utterances does not each
+ * wait two seconds, and then read again: a language pack installed after
+ * setup has to be found without a reload.
+ */
+const EMPTY_VOICES_TTL_MS = 30_000;
 
 function invalidateVoices(): void {
   voicesCache = null;
   voicesRead = null;
+  emptyVoicesAt = 0;
 }
 
 /**
@@ -86,6 +99,10 @@ function getVoices(): Promise<SpeechSynthesisVoice[]> {
 
   watchForChanges();
 
+  // Remembered for a while, but not for the life of the page: a voice list
+  // that came back empty may simply not have been ready.
+  if (Date.now() - emptyVoicesAt < EMPTY_VOICES_TTL_MS) return Promise.resolve([]);
+
   const immediate = s.getVoices();
   if (immediate.length > 0) {
     voicesCache = immediate;
@@ -99,7 +116,13 @@ function getVoices(): Promise<SpeechSynthesisVoice[]> {
         clearTimeout(timer);
         s.removeEventListener("voiceschanged", done);
         const found = s.getVoices();
-        voicesCache = found;
+        if (found.length > 0) {
+          voicesCache = found;
+          emptyVoicesAt = 0;
+        } else {
+          // Not cached: an empty answer is the least trustworthy one there is.
+          emptyVoicesAt = Date.now();
+        }
         resolve(found);
       };
       s.addEventListener("voiceschanged", done);
