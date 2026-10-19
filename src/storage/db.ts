@@ -70,3 +70,22 @@ export async function listRuns(limit = 20): Promise<Run[]> {
 export async function saveRun(r: Run): Promise<void> {
   await tx(RUNS, "readwrite", (s) => s.put(r));
 }
+
+export async function deleteRun(id: string): Promise<void> {
+  await tx(RUNS, "readwrite", (s) => s.delete(id));
+}
+
+/** Forget every Run, for a person who wants the record gone. */
+export async function clearRuns(): Promise<void> {
+  const db = await open();
+  await new Promise<void>((resolve, reject) => {
+    const t = db.transaction(RUNS, "readwrite");
+    const store = t.objectStore(RUNS);
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      for (const key of req.result) store.delete(key);
+    };
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+  });
+}

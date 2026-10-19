@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { draftTitle, findCollectionByTitle, planCollectionSave } from "../domain/collections";
 import { formatVocabText, toChunks } from "../domain/chunking";
-import type { SharedSetup } from "../domain/share";
 import {
   LANGUAGES,
   languageById,
   type LanguageId,
   type Mode,
+  type SetupFill,
   type StartInput,
 } from "../domain/types";
 import { isSupported, webSpeech } from "../tts";
@@ -18,13 +18,17 @@ import { Share } from "./Share";
 
 interface Props {
   onStart: (input: StartInput) => void;
+  /** Open the list of past Runs and what still needs practice. */
+  onHistory: () => void;
   voices: VoiceOption[];
   /** null = still loading. */
   canEnumerate: boolean | null;
-  /** A dictation that arrived in the URL. */
-  shared?: SharedSetup | null;
-  /** The URL carried a dictation that could not be read. */
-  shareBroken?: boolean;
+  /** The material the screen starts with, from a Shared Link or a drill. */
+  initial: SetupFill | null;
+  /** The material arrived in a Shared Link, which is worth saying so. */
+  fromLink: boolean;
+  /** A dictation arrived in the link but could not be read. */
+  shareBroken: boolean;
   /** A read or write failed, so the browser cannot keep anything. */
   onStorageFail: () => void;
 }
@@ -59,16 +63,18 @@ function hasVoiceFor(voices: VoiceOption[], id: LanguageId): boolean {
 
 export function Setup({
   onStart,
+  onHistory,
   voices,
   canEnumerate,
-  shared,
+  initial,
+  fromLink,
   shareBroken,
   onStorageFail,
 }: Props) {
-  const [language, setLanguage] = useState<LanguageId>(shared?.language ?? "yue");
-  const [mode, setMode] = useState<Mode>(shared?.mode ?? "paragraph");
-  const [title, setTitle] = useState(shared?.title ?? "");
-  const [text, setText] = useState(shared?.text ?? "");
+  const [language, setLanguage] = useState<LanguageId>(initial?.language ?? "yue");
+  const [mode, setMode] = useState<Mode>(initial?.mode ?? "paragraph");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [text, setText] = useState(initial?.text ?? "");
   const [collections, setCollections] = useState<Collection[]>([]);
   const [testState, setTestState] = useState<"idle" | "speaking" | "ok" | "failed">("idle");
   const [sharing, setSharing] = useState(false);
@@ -130,9 +136,12 @@ export function Setup({
     <div className="pad stack">
       <header className="su-head">
         <h1>Self dictation</h1>
+        <button className="rowbtn" onClick={onHistory}>
+          Your progress
+        </button>
       </header>
 
-      {shared && (
+      {fromLink && (
         <p className="note good">
           Opened from a shared link. Check that this device has the voice for it, then start.
         </p>

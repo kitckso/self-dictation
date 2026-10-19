@@ -66,6 +66,12 @@ Screen", or host `dist/` on any static host.
 3. **Results** — every Reference appears at once, beside what you typed and a
    diff of the two, or the ✓ all / ~ some / ✗ wrong buttons for what you wrote
    on paper. The score is the mean of both and settles as you mark.
+4. **Progress** — every Run is kept, so **Your progress** can show what you
+   have done and, more usefully, which material caught you out. Anything whose
+   most recent answer was wrong is listed as a Weakness, grouped by Language,
+   and can be drilled again in one tap. A Weakness is cleared by getting it
+   right — skipping it does not count, because not doing it says nothing about
+   whether it can be done.
 
 **Paragraph** mode splits on sentence boundaries (`。！？` / `.?!`), falling back
 to clause punctuation (`，、；`) for long sentences, capped at 70 characters.
@@ -104,9 +110,9 @@ Services → Install voice data → Cantonese.
 
 ## Your data
 
-Everything stays in your browser. Collections and Run history are stored in
-IndexedDB; nothing is uploaded anywhere, because there is nowhere to upload it.
-Clearing site data erases it.
+Everything stays in your browser. Collections, Run history and your Progress
+are stored in IndexedDB; nothing is uploaded anywhere, because there is nowhere
+to upload it. Clearing site data erases it.
 
 A shared link carries the dictation itself, deflated and encoded into the part
 of the URL after the `#`. That part is never sent to the host — which is why
@@ -117,10 +123,10 @@ holding the link holds the text, so send it the way you would send the text.
 
 ```
 src/
-  domain/       types, chunking, grading, share encoding — no React, no browser APIs
+  domain/       types, chunking, grading, progress, share encoding — no React, no browser APIs
   tts/          TtsProvider seam + the Web Speech implementation
   storage/      IndexedDB
-  screens/      Setup, Run, Results, Share
+  screens/      Setup, Run, Results, History, Share
   lib/          small helpers
 ```
 
@@ -137,7 +143,10 @@ See [GLOSSARY.md](GLOSSARY.md) for the vocabulary this project uses.
 - Cantonese availability is entirely up to the device; see the table above.
 - Speed is a request to the device voice, not a promise: some voices clamp it,
   and some ignore it outright, so 75% can sound the same as 100%.
-- No spaced repetition yet — Runs are recorded, but nothing schedules them.
+- No spaced repetition yet — your Progress records what went wrong and offers
+  it back, but nothing schedules a review or spaces the intervals out.
+- Progress is per material, not per Collection: the same sentence in two
+  different Passages counts as one item.
 - Punctuation, whitespace and English case are ignored when grading. Traditional
   and Simplified Chinese are treated as different characters, so typing 简 into a
   繁 passage counts as wrong.

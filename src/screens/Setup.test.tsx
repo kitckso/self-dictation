@@ -20,8 +20,12 @@ function renderSetup(props: Partial<Parameters<typeof Setup>[0]> = {}) {
   return render(
     <Setup
       onStart={() => {}}
+      onHistory={() => {}}
       voices={[]}
       canEnumerate={false}
+      initial={null}
+      fromLink={false}
+      shareBroken={false}
       onStorageFail={() => {}}
       {...props}
     />,
@@ -31,7 +35,8 @@ function renderSetup(props: Partial<Parameters<typeof Setup>[0]> = {}) {
 describe("Setup", () => {
   it("opens a dictation that arrived in a link", () => {
     const { container } = renderSetup({
-      shared: { language: "zh", mode: "vocab", title: "生字", text: "圖書館\n醫院" },
+      initial: { language: "zh", mode: "vocab", title: "生字", text: "圖書館\n醫院" },
+      fromLink: true,
     });
 
     expect(screen.getByRole("button", { name: /Mandarin/ }).getAttribute("aria-pressed")).toBe(

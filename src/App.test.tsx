@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
-import { listCollections, saveRun } from "./storage/db";
+import { listCollections, listRuns, saveRun } from "./storage/db";
 
 vi.mock("./tts", () => ({
   isSupported: () => true,
@@ -20,6 +20,9 @@ vi.mock("./storage/db", () => ({
   saveCollection: vi.fn().mockResolvedValue(undefined),
   deleteCollection: vi.fn().mockResolvedValue(undefined),
   saveRun: vi.fn().mockResolvedValue(undefined),
+  listRuns: vi.fn().mockResolvedValue([]),
+  deleteRun: vi.fn().mockResolvedValue(undefined),
+  clearRuns: vi.fn().mockResolvedValue(undefined),
 }));
 
 const shared: SharedSetup = {
@@ -154,5 +157,44 @@ describe("App", () => {
     // Persistence is a convenience, never a precondition: the reveal still happens.
     expect(await screen.findByRole("button", { name: /run it again/i })).toBeTruthy();
     expect(screen.getByText(/cannot save your work/i)).toBeTruthy();
+  });
+
+  it("opens the past runs from Setup, and comes back to a new dictation", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /your progress/i }));
+    expect(await screen.findByText(/your progress/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /new dictation/i }));
+    expect(await screen.findByRole("button", { name: /start dictation/i })).toBeTruthy();
+  });
+
+  it("starts a drill from the past runs at Setup, with the material filled in", async () => {
+    vi.mocked(listRuns).mockResolvedValue([
+      {
+        id: "r1",
+        collectionId: null,
+        title: "Lesson 1",
+        language: "zh",
+        mode: "vocab",
+        chunks: ["圖書館", "醫院"],
+        results: [
+          { index: 0, transcript: "", outcome: "wrong" },
+          { index: 1, transcript: "", outcome: "correct" },
+        ],
+        startedAt: 1_000,
+        finishedAt: 2_000,
+      },
+    ]);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /your progress/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Drill these 1/ }));
+
+    // A drill goes to Setup rather than straight to a Run: the material and the
+    // Voice are both checked before anything is spoken.
+    const box = await screen.findByPlaceholderText(/圖書館/);
+    expect((box as HTMLTextAreaElement).value).toBe("圖書館");
+    expect(screen.getByDisplayValue(/Needs practice/)).toBeTruthy();
   });
 });

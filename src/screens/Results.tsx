@@ -17,6 +17,8 @@ interface Props {
   onMark: (index: number, outcome: Outcome | null) => void;
   onAgain: () => void;
   onSetup: () => void;
+  /** Open the list of past Runs and what still needs practice. */
+  onHistory: () => void;
 }
 
 const OUTCOMES: { id: Outcome; label: string }[] = [
@@ -39,6 +41,7 @@ export function Results({
   onMark,
   onAgain,
   onSetup,
+  onHistory,
 }: Props) {
   /**
    * Graded once per change, not once per score and once per diff.
@@ -118,6 +121,9 @@ export function Results({
 
       <button className="btn" onClick={onAgain}>
         Run it again
+      </button>
+      <button className="btn" onClick={onHistory}>
+        Your progress
       </button>
       <button className="btn primary" onClick={onSetup}>
         New dictation

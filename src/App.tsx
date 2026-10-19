@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { toChunks } from "./domain/chunking";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
-import type { Outcome, Run as RunRecord, StartInput } from "./domain/types";
+import type { Outcome, Run as RunRecord, SetupFill, StartInput } from "./domain/types";
 import { saveRun } from "./storage/db";
 import { newId } from "./lib/id";
 import { isSupported, webSpeech } from "./tts";
 import type { VoiceOption } from "./tts";
 import { Setup } from "./screens/Setup";
 import { Results } from "./screens/Results";
+import { History } from "./screens/History";
 import { Run, type RunState } from "./screens/Run";
 
 type Screen =
   | { name: "setup" }
+  | { name: "history" }
   | { name: "run"; run: RunState }
   | { name: "results"; run: RunState; record: RunRecord };
 
@@ -44,6 +46,19 @@ export default function App() {
    * swallowing them silently would mean a Run that looks saved and is not.
    */
   const [storageBroken, setStorageBroken] = useState(false);
+  /**
+   * Material the Setup screen starts with, other than from a Shared Link.
+   *
+   * A drill from the past runs, or the same Passage again, arrives here rather
+   * than going straight to a Run: every Run begins at Setup, so the material
+   * and the Voice are both checked before anything is spoken.
+   */
+  const [fill, setFill] = useState<SetupFill | null>(null);
+  /**
+   * Bumped whenever the material on the Setup screen changes, so the form
+   * starts again from it rather than keeping the old answers.
+   */
+  const [setupGen, setSetupGen] = useState(0);
 
   useEffect(() => {
     if (!isSupported()) {
@@ -80,12 +95,16 @@ export default function App() {
           // like an empty Setup, and the recipient would not know to ask for the
           // text instead.
           setArrival(setup ? { kind: "shared", payload, setup } : { kind: "broken" });
+          // A different link is a different Setup: the form starts again from
+          // it rather than keeping the old answers.
+          setSetupGen((g) => g + 1);
         })
         .catch(() => {
           // `decodeSetup` is written not to throw, but a link the browser
           // cannot even hand over is still just an unreadable link.
           if (gen !== readGen.current) return;
           setArrival({ kind: "broken" });
+          setSetupGen((g) => g + 1);
         });
     }
 
@@ -93,6 +112,19 @@ export default function App() {
     window.addEventListener("hashchange", readHash);
     return () => window.removeEventListener("hashchange", readHash);
   }, []);
+
+  /**
+   * Go to Setup with some material already chosen.
+   *
+   * A Shared Link that has already been read is cleared, because the newest
+   * thing the person asked for is the material they are being sent here with.
+   */
+  function goSetup(next: SetupFill | null = null) {
+    setFill(next);
+    setArrival((a) => (a.kind === "shared" || a.kind === "broken" ? { kind: "none" } : a));
+    setSetupGen((g) => g + 1);
+    setScreen({ name: "setup" });
+  }
 
   function start(input: StartInput) {
     const chunks = toChunks(input.text, input.mode);
@@ -159,17 +191,27 @@ export default function App() {
           <p className="note pad">Opening the shared dictation…</p>
         ) : (
           <Setup
-            // A different link is a different Setup: keying on the payload makes
-            // the form start again from it rather than keep the old answers.
-            key={arrival.kind === "shared" ? arrival.payload : "blank"}
+            // A different link or a different drill is a different Setup:
+            // keying on the generation makes the form start again from it
+            // rather than keep the old answers.
+            key={setupGen}
             onStart={start}
+            onHistory={() => setScreen({ name: "history" })}
             voices={voices}
             canEnumerate={canEnumerate}
-            shared={arrival.kind === "shared" ? arrival.setup : null}
+            initial={arrival.kind === "shared" ? arrival.setup : fill}
+            fromLink={arrival.kind === "shared"}
             shareBroken={arrival.kind === "broken"}
             onStorageFail={() => setStorageBroken(true)}
           />
         ))}
+      {screen.name === "history" && (
+        <History
+          onBack={() => goSetup(null)}
+          onDrill={(next) => goSetup(next)}
+          onStorageFail={() => setStorageBroken(true)}
+        />
+      )}
       {screen.name === "run" && (
         <Run run={screen.run} onFinish={(transcripts) => finish(screen.run, transcripts)} />
       )}
@@ -185,7 +227,8 @@ export default function App() {
             // A second pass is a new Run, so it gets a new start time.
             setScreen({ name: "run", run: { ...screen.run, startedAt: Date.now() } })
           }
-          onSetup={() => setScreen({ name: "setup" })}
+          onSetup={() => goSetup(null)}
+          onHistory={() => setScreen({ name: "history" })}
         />
       )}
     </div>

@@ -24,6 +24,7 @@ function Harness({ initial }: { initial: Mark[] }) {
       }
       onAgain={() => {}}
       onSetup={() => {}}
+      onHistory={() => {}}
     />
   );
 }

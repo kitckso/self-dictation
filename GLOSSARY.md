@@ -113,6 +113,32 @@ The comparison of a Transcript against its Reference, yielding an accuracy
 figure and a display of where they differ.
 _Avoid_: Scoring, marking, evaluation
 
+**Outcome**:
+How one Chunk was answered in a Run. A Transcript is Graded for an accuracy; a
+Paper Answer is marked by the person as correct, partial, or wrong. Both end up
+as the same kind of answer, which is what lets a Weakness be worked out across
+Runs made in either mode.
+_Avoid_: Score, grade, result, verdict
+
+**Progress**:
+What is known about how a person has done on each piece of material, across
+every Run so far. Progress is a property of the material rather than of a Run,
+so it outlives the Run that established it.
+_Avoid_: Stats, history, record, analytics
+
+**Weakness**:
+Material whose most recent Outcome was wrong, and which is therefore worth
+practising again. A Weakness is cleared by answering the material correctly,
+but not by skipping it — not doing it says nothing about whether it can be
+done.
+_Avoid_: Mistake, error, wrong answer, gap
+
+**Drill**:
+A Run made of material that was chosen because it is a Weakness. A Drill begins
+at Setup like any other Run, so the material and the Voice are checked before
+anything is spoken.
+_Avoid_: Review, revision, re-run
+
 **Setup**:
 The step before a Run in which a Language, a Mode, and the material are chosen.
 Every Run begins at Setup; nothing is chosen mid-Run. A Setup may also arrive
