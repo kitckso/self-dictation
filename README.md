@@ -50,7 +50,8 @@ Screen", or host `dist/` on any static host.
 1. **Setup** — pick a Language, a Mode, and paste your content. Saved material
    is kept in the browser so you can drill it again later. Starting with a
    title that is already saved overwrites that Collection rather than adding a
-   duplicate, so re-drilling a sample refreshes it in place.
+   duplicate, so re-drilling a sample refreshes it in place. **Share** turns what
+   you have set up into a link — and a QR code — to hand to somebody else.
 2. **Run** — each Chunk gets its own numbered slot so you can see how much is
    left without seeing a word of it. Listen and write; the app shows nothing to
    check yourself against. Navigation never moves past a Chunk on its own.
@@ -105,20 +106,27 @@ Everything stays in your browser. Collections and Run history are stored in
 IndexedDB; nothing is uploaded anywhere, because there is nowhere to upload it.
 Clearing site data erases it.
 
+A shared link carries the dictation itself, deflated and encoded into the part
+of the URL after the `#`. That part is never sent to the host — which is why
+sharing needs no server, and why the link opens offline. It also means anyone
+holding the link holds the text, so send it the way you would send the text.
+
 ## Project layout
 
 ```
 src/
-  domain/       types, chunking, grading — no React, no browser APIs
+  domain/       types, chunking, grading, share encoding — no React, no browser APIs
   tts/          TtsProvider seam + the Web Speech implementation
   storage/      IndexedDB
-  screens/      Setup, Run, Results
+  screens/      Setup, Run, Results, Share
   lib/          small helpers
 ```
 
 The domain layer is deliberately free of UI and browser concerns, and speech
 sits behind `TtsProvider` so a hosted provider can be added later without
-touching the screens.
+touching the screens. The share codec is the one exception: it uses the
+platform's own DEFLATE rather than bundling one. QR generation is the project's
+only runtime dependency other than React.
 
 See [GLOSSARY.md](GLOSSARY.md) for the vocabulary this project uses.
 

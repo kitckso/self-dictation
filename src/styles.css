@@ -483,6 +483,74 @@ h2 {
   border-bottom: 1px solid var(--line);
 }
 
+/* ---------- share ---------- */
+dialog.share {
+  width: min(380px, calc(100vw - 24px));
+  margin: auto;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--bg2);
+  color: var(--fg);
+}
+dialog.share::backdrop {
+  background: #000000c0;
+  backdrop-filter: blur(4px);
+}
+.share-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.share-sub {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+/* White, quiet zone included: a camera reads dark-on-light, and this app is
+   dark-on-dark everywhere else. */
+.qr {
+  width: min(300px, 100%);
+  margin: 16px auto 0;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+}
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.share-link {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  outline: none;
+}
+.share-link:focus {
+  border-color: var(--accent);
+}
+.share-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.share-actions .btn {
+  flex: 1 1 auto;
+  padding: 13px;
+  font-size: 14px;
+}
+
 @media (max-width: 380px) {
   .run-rail {
     gap: 4px;

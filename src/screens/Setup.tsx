@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { draftTitle, findCollectionByTitle, planCollectionSave } from "../domain/collections";
 import { formatVocabText, toChunks } from "../domain/chunking";
+import type { SharedSetup } from "../domain/share";
 import { LANGUAGES, languageById, type LanguageId, type Mode } from "../domain/types";
 import { isSupported, webSpeech } from "../tts";
 import type { VoiceOption } from "../tts";
 import { deleteCollection, listCollections, saveCollection } from "../storage/db";
 import { newId } from "../lib/id";
 import type { Collection } from "../domain/types";
+import { Share } from "./Share";
 
 interface Props {
   onStart: (input: {
@@ -19,6 +21,10 @@ interface Props {
   voices: VoiceOption[];
   /** null = still loading. */
   canEnumerate: boolean | null;
+  /** A dictation that arrived in the URL. */
+  shared?: SharedSetup | null;
+  /** The URL carried a dictation that could not be read. */
+  shareBroken?: boolean;
 }
 
 const SAMPLES: Record<Mode, Record<LanguageId, string>> = {
@@ -49,13 +55,14 @@ function hasVoiceFor(voices: VoiceOption[], id: LanguageId): boolean {
   });
 }
 
-export function Setup({ onStart, voices, canEnumerate }: Props) {
-  const [language, setLanguage] = useState<LanguageId>("yue");
-  const [mode, setMode] = useState<Mode>("paragraph");
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
+export function Setup({ onStart, voices, canEnumerate, shared, shareBroken }: Props) {
+  const [language, setLanguage] = useState<LanguageId>(shared?.language ?? "yue");
+  const [mode, setMode] = useState<Mode>(shared?.mode ?? "paragraph");
+  const [title, setTitle] = useState(shared?.title ?? "");
+  const [text, setText] = useState(shared?.text ?? "");
   const [collections, setCollections] = useState<Collection[]>([]);
   const [testState, setTestState] = useState<"idle" | "speaking" | "ok" | "failed">("idle");
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     void listCollections().then(setCollections);
@@ -82,6 +89,8 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
 
   const chunks = useMemo(() => toChunks(text, mode, language), [text, mode, language]);
   const canStart = chunks.length > 0;
+  /** Stable identity, so the Share panel does not re-encode on every keystroke. */
+  const shareable = useMemo(() => ({ language, mode, title, text }), [language, mode, title, text]);
 
   const saved = useMemo(
     () => findCollectionByTitle(collections, draftTitle(title, mode)),
@@ -110,6 +119,18 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
       <header className="su-head">
         <h1>Self dictation</h1>
       </header>
+
+      {shared && (
+        <p className="note good">
+          Opened from a shared link. Check that this device has the voice for it, then start.
+        </p>
+      )}
+      {shareBroken && (
+        <p className="note bad">
+          A dictation arrived in this link, but it could not be read — this browser may be too old
+          to unpack it. Ask whoever sent it for the text instead.
+        </p>
+      )}
 
       <section>
         <p className="lbl">1 · Language</p>
@@ -255,6 +276,13 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
           </div>
         </section>
       )}
+
+      {canStart && (
+        <button className="btn" onClick={() => setSharing((open) => !open)}>
+          {sharing ? "Hide the link" : "Share a link"}
+        </button>
+      )}
+      {canStart && sharing && <Share setup={shareable} onClose={() => setSharing(false)} />}
 
       <button className="btn primary" disabled={!canStart} onClick={() => void save()}>
         Start dictation

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toChunks } from "./domain/chunking";
+import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
 import type { LanguageId, Mode, Outcome, Run as RunRecord } from "./domain/types";
 import { saveRun } from "./storage/db";
 import { newId } from "./lib/id";
@@ -14,10 +15,21 @@ type Screen =
   | { name: "run"; run: RunState }
   | { name: "results"; run: RunState; record: RunRecord };
 
+/**
+ * What the URL brought with it.
+ *
+ * `waiting` only ever applies to a visitor who arrived with a payload, so an
+ * ordinary visit still draws Setup on the first frame.
+ */
+type Arrival = "none" | "waiting" | "broken" | { setup: SharedSetup };
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: "setup" });
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [canEnumerate, setCanEnumerate] = useState<boolean | null>(null);
+  const [arrival, setArrival] = useState<Arrival>(() =>
+    payloadFromHash(window.location.hash) ? "waiting" : "none",
+  );
 
   useEffect(() => {
     if (!isSupported()) {
@@ -26,6 +38,20 @@ export default function App() {
     }
     void webSpeech.listVoices().then(setVoices);
     void webSpeech.canEnumerateVoices().then(setCanEnumerate);
+  }, []);
+
+  useEffect(() => {
+    const payload = payloadFromHash(window.location.hash);
+    if (!payload) return;
+    let live = true;
+    void decodeSetup(payload).then((setup) => {
+      // A link we cannot read is worth saying out loud: silence would look like
+      // an empty Setup, and the recipient would not know to ask for the text.
+      if (live) setArrival(setup ? { setup } : "broken");
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
   function start(input: {
@@ -86,9 +112,18 @@ export default function App() {
 
   return (
     <div className="app">
-      {screen.name === "setup" && (
-        <Setup onStart={start} voices={voices} canEnumerate={canEnumerate} />
-      )}
+      {screen.name === "setup" &&
+        (arrival === "waiting" ? (
+          <p className="note pad">Opening the shared dictation…</p>
+        ) : (
+          <Setup
+            onStart={start}
+            voices={voices}
+            canEnumerate={canEnumerate}
+            shared={typeof arrival === "object" ? arrival.setup : null}
+            shareBroken={arrival === "broken"}
+          />
+        ))}
       {screen.name === "run" && (
         <Run run={screen.run} onFinish={(transcripts) => finish(screen.run, transcripts)} />
       )}

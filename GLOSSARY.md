@@ -43,6 +43,15 @@ _Avoid_: Word, term, flashcard
 One of Paragraph or Vocabulary — which kind of material a Run is made of.
 _Avoid_: Drill type, exercise type, category
 
+**Shared Link**:
+A URL that carries a Setup — Language, Mode, title and material — so that
+whoever opens it arrives at Setup with that dictation ready. The material is
+deflated and encoded into the fragment (after the `#`) rather than the query
+string, because a query string is sent to the host and would land in its access
+logs. Nothing about a Shared Link is uploaded, and anyone holding one holds the
+text.
+_Avoid_: Invite, permalink, deep link
+
 ## A Run
 
 **Run**:
@@ -104,7 +113,8 @@ _Avoid_: Scoring, marking, evaluation
 
 **Setup**:
 The step before a Run in which a Language, a Mode, and the material are chosen.
-Every Run begins at Setup; nothing is chosen mid-Run.
+Every Run begins at Setup; nothing is chosen mid-Run. A Setup may also arrive
+already filled in, from a Shared Link.
 _Avoid_: Onboarding, start screen, new run
 
 ## Writing Systems
