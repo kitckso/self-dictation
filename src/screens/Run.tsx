@@ -8,8 +8,7 @@ import {
   playSequence,
 } from "../domain/autoplay";
 import { significantLength } from "../domain/chunking";
-import { grade, scoreChunk, scoreRun } from "../domain/grading";
-import { languageById, type LanguageId, type Mode, type Outcome } from "../domain/types";
+import { languageById, type LanguageId, type Mode } from "../domain/types";
 import { webSpeech } from "../tts";
 
 export interface RunState {
@@ -22,10 +21,9 @@ export interface RunState {
 
 interface Props {
   run: RunState;
-  onFinish: (results: { transcript: string; outcome: Outcome | null }[]) => void;
+  /** What was typed, one entry per Chunk. Empty strings where nothing was. */
+  onFinish: (transcripts: string[]) => void;
 }
-
-type Mark = Record<number, { transcript: string; outcome: Outcome | null; revealed: boolean }>;
 
 type AnswerOn = "paper" | "typed";
 
@@ -46,16 +44,11 @@ function defaultAnswerOn(lang: LanguageId): AnswerOn {
  * Layout B from the prototype: every Chunk visible as a numbered slot so you
  * can see how much is left without seeing a word of it.
  *
- * The textarea is optional. Most people write Chinese on paper, so the primary
- * path is speak → write → reveal → mark yourself; the diff is there for anyone
- * who did type.
+ * Nothing about the material appears here — no Reference, no score. Listen,
+ * write it down, and the whole Passage is revealed at once on Results.
  */
 export function Run({ run, onFinish }: Props) {
-  const [mark, setMark] = useState<Mark>(() =>
-    Object.fromEntries(
-      run.chunks.map((_, i) => [i, { transcript: "", outcome: null, revealed: false }]),
-    ),
-  );
+  const [transcripts, setTranscripts] = useState<Record<number, string>>({});
   const [cursor, setCursor] = useState(0);
   const [speaking, setSpeaking] = useState<number | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
@@ -67,6 +60,7 @@ export function Run({ run, onFinish }: Props) {
   const typingAllowed = answerOn === "typed";
   const listRef = useRef<HTMLDivElement>(null);
   const tag = speakTag(run.language);
+  const typedCount = Object.values(transcripts).filter((t) => t.trim()).length;
 
   /**
    * Whoever bumps this owns the speaker. A tap, a stop, or the effect being
@@ -121,13 +115,6 @@ export function Run({ run, onFinish }: Props) {
     };
   }, [auto, repeats, delaySec, run.chunks, tag]);
 
-  function patch(i: number, next: Partial<Mark[number]>) {
-    setMark((prev) => ({
-      ...prev,
-      [i]: { ...(prev[i] ?? { transcript: "", outcome: null, revealed: false }), ...next },
-    }));
-  }
-
   /** Silence whoever is speaking and forget them. */
   function stopPlayback() {
     playGen.current += 1;
@@ -175,22 +162,11 @@ export function Run({ run, onFinish }: Props) {
     setCursor((c) => Math.max(c - 1, 0));
   }
 
-  /** End the Run and go to Results, whether or not anything was attempted. */
+  /** End the Run and reveal the whole Passage, whether or not all of it was answered. */
   function finish() {
     stopPlayback();
-    onFinish(
-      run.chunks.map((_, i) => ({
-        transcript: mark[i]?.transcript ?? "",
-        outcome: mark[i]?.outcome ?? null,
-      })),
-    );
+    onFinish(run.chunks.map((_, i) => transcripts[i] ?? ""));
   }
-
-  const scores = run.chunks.map((ref, i) =>
-    scoreChunk(ref, mark[i]?.transcript ?? "", mark[i]?.outcome ?? null),
-  );
-  const overall = scoreRun(scores);
-  const attempted = scores.filter((s) => s !== null).length;
 
   return (
     <>
@@ -198,8 +174,8 @@ export function Run({ run, onFinish }: Props) {
         <div className="run-head">
           <span className="nm">{run.title}</span>
           <span className="note">
-            {cursor + 1}/{run.chunks.length} · {attempted} answered
-            {overall !== null && ` · ${Math.round(overall * 100)}%`}
+            {cursor + 1}/{run.chunks.length}
+            {typingAllowed && typedCount > 0 && ` · ${typedCount} typed`}
           </span>
         </div>
 
@@ -226,93 +202,45 @@ export function Run({ run, onFinish }: Props) {
           </p>
         </div>
 
-        {run.chunks.map((chunk, i) => {
-          const m = mark[i] ?? { transcript: "", outcome: null, revealed: false };
-          const g = m.transcript.trim() ? grade(chunk, m.transcript) : null;
-          const shownScore = g?.accuracy ?? outcomeScore(m.outcome);
-          return (
-            <article
-              className={`slot${i === cursor ? " now" : ""}${m.revealed ? " done" : ""}`}
-              data-slot={i}
-              key={i}
-              onClick={() => focusSlot(i)}
-            >
-              <header>
-                <span className="num">{i + 1}</span>
-                {m.revealed ? (
-                  <span
-                    className={`score ${shownScore !== null && shownScore < 0.8 ? "poor" : "good"}`}
-                  >
-                    {pctText(shownScore)}
-                  </span>
-                ) : (
-                  <span className="chip">{significantLength(chunk)} chars</span>
-                )}
-                <div className="spacer" />
-                <button
-                  className="mini"
-                  disabled={auto}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void speak(i);
-                  }}
-                >
-                  {speaking === i ? "■ stop" : "▶ speak"}
-                </button>
-              </header>
+        {run.chunks.map((chunk, i) => (
+          <article
+            className={`slot${i === cursor ? " now" : ""}`}
+            data-slot={i}
+            key={i}
+            onClick={() => focusSlot(i)}
+          >
+            <header>
+              <span className="num">{i + 1}</span>
+              <span className="chip">{significantLength(chunk)} chars</span>
+              <div className="spacer" />
+              <button
+                className="mini"
+                disabled={auto}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void speak(i);
+                }}
+              >
+                {speaking === i ? "■ stop" : "▶ speak"}
+              </button>
+            </header>
 
-              <div className="slot-body">
-                {m.revealed ? (
-                  <>
-                    <div className="ref">{diffHtml(chunk, m.transcript)}</div>
-                    {g && (
-                      <p className="note">
-                        {g.missing === 0 && g.extra === 0
-                          ? "exact"
-                          : `${g.missing} missing${g.extra ? `, ${g.extra} extra` : ""}`}
-                      </p>
-                    )}
-                    <div className="mark-row">
-                      <span className="note">self-mark:</span>
-                      {(["correct", "partial", "wrong"] as const).map((o) => (
-                        <button
-                          key={o}
-                          className={`mark ${m.outcome === o ? "on" : ""}`}
-                          onClick={() => patch(i, { outcome: m.outcome === o ? null : o })}
-                        >
-                          {o === "correct" ? "✓ all" : o === "partial" ? "~ some" : "✗ wrong"}
-                        </button>
-                      ))}
-                      <button
-                        className="mark"
-                        onClick={() => patch(i, { transcript: "", outcome: null, revealed: false })}
-                      >
-                        redo
-                      </button>
-                    </div>
-                  </>
-                ) : typingAllowed ? (
-                  <textarea
-                    className="answer"
-                    rows={1}
-                    placeholder="type what you hear"
-                    value={m.transcript}
-                    onChange={(e) => patch(i, { transcript: e.target.value })}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <p className="note paper">write it on paper, then show the answer</p>
-                )}
-              </div>
-
-              {!m.revealed && (
-                <button className="reveal" onClick={() => patch(i, { revealed: true })}>
-                  show answer
-                </button>
+            <div className="slot-body">
+              {typingAllowed ? (
+                <textarea
+                  className="answer"
+                  rows={1}
+                  placeholder="type what you hear"
+                  value={transcripts[i] ?? ""}
+                  onChange={(e) => setTranscripts((prev) => ({ ...prev, [i]: e.target.value }))}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <p className="note paper">write it on paper</p>
               )}
-            </article>
-          );
-        })}
+            </div>
+          </article>
+        ))}
       </div>
 
       <div className="run-foot">
@@ -398,31 +326,6 @@ export function Run({ run, onFinish }: Props) {
   );
 }
 
-function outcomeScore(o: Outcome | null): number | null {
-  if (o === "correct") return 1;
-  if (o === "partial") return 0.5;
-  if (o === "wrong") return 0;
-  return null;
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function pctText(v: number | null): string {
-  return v === null ? "—" : `${Math.round(v * 100)}%`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(
-    /[&<>"]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string,
-  );
-}
-
-function diffHtml(reference: string, transcript: string): string {
-  if (!transcript.trim()) return escapeHtml(reference);
-  return grade(reference, transcript)
-    .parts.map((p) => `<span class="tok ${p.kind}">${escapeHtml(p.char)}</span>`)
-    .join("");
 }

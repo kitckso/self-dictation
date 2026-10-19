@@ -9,8 +9,9 @@ Built for phones and tablets, and usable offline once installed.
 ## Why it works this way
 
 **Nothing is shown while you answer.** Dictating with the text visible is
-copying, not dictation. The Reference and the Jyutping/Pinyin overlay are both
-hidden until you ask to see them.
+copying, not dictation. Neither the Reference nor the Jyutping/Pinyin overlay
+appears until the Run is over — the whole Passage is revealed at once, so
+nothing you are still working on can leak.
 
 **Typing is a trap for Chinese.** Typing 今日 through pinyin, Cangjie or any
 input method produces the correct characters _without you knowing how to form
@@ -51,13 +52,15 @@ Screen", or host `dist/` on any static host.
    title that is already saved overwrites that Collection rather than adding a
    duplicate, so re-drilling a sample refreshes it in place.
 2. **Run** — each Chunk gets its own numbered slot so you can see how much is
-   left without seeing a word of it. Speak, write, reveal, mark. Navigation
-   never moves past a Chunk on its own. **Auto-play** walks the Run for you:
-   the bottom bar sets how many times each Chunk is spoken and how long to
-   pause before the next play or repeat — 2 times and 5 seconds to begin with —
-   and starts it. It stops when you touch a speech control, move the cursor,
-   or reach the end.
-3. **Results** — the whole passage with your answers against the originals.
+   left without seeing a word of it. Listen and write; the app shows nothing to
+   check yourself against. Navigation never moves past a Chunk on its own.
+   **Auto-play** walks the Run for you: the bottom bar sets how many times each
+   Chunk is spoken and how long to pause before the next play or repeat — 2
+   times and 5 seconds to begin with — and starts it. It stops when you touch a
+   speech control, move the cursor, or reach the end.
+3. **Results** — every Reference appears at once, beside what you typed and a
+   diff of the two, or the ✓ all / ~ some / ✗ wrong buttons for what you wrote
+   on paper. The score is the mean of both and settles as you mark.
 
 **Paragraph** mode splits on sentence boundaries (`。！？` / `.?!`), falling back
 to clause punctuation (`，、；`) for long sentences, capped at 70 characters.

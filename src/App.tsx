@@ -12,7 +12,7 @@ import { Run, type RunState } from "./screens/Run";
 type Screen =
   | { name: "setup" }
   | { name: "run"; run: RunState }
-  | { name: "results"; run: RunState; results: { transcript: string; outcome: Outcome | null }[] };
+  | { name: "results"; run: RunState; record: RunRecord };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: "setup" });
@@ -49,7 +49,8 @@ export default function App() {
     });
   }
 
-  function finish(run: RunState, results: { transcript: string; outcome: Outcome | null }[]) {
+  function finish(run: RunState, transcripts: string[]) {
+    const now = Date.now();
     const record: RunRecord = {
       id: newId(),
       collectionId: run.collectionId,
@@ -57,12 +58,30 @@ export default function App() {
       language: run.language,
       mode: run.mode,
       chunks: run.chunks,
-      results: run.chunks.map((_, i) => ({ index: i, ...results[i] })),
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
+      results: run.chunks.map((_, i) => ({
+        index: i,
+        transcript: transcripts[i] ?? "",
+        outcome: null,
+      })),
+      startedAt: now,
+      finishedAt: now,
     };
     void saveRun(record);
-    setScreen({ name: "results", run, results });
+    setScreen({ name: "results", run, record });
+  }
+
+  /**
+   * Self-marking happens after the Run, on the Results screen, so the saved
+   * record is rewritten as marks are made rather than queued for the end.
+   */
+  function mark(index: number, outcome: Outcome | null) {
+    if (screen.name !== "results") return;
+    const record: RunRecord = {
+      ...screen.record,
+      results: screen.record.results.map((r, i) => (i === index ? { ...r, outcome } : r)),
+    };
+    setScreen({ name: "results", run: screen.run, record });
+    void saveRun(record);
   }
 
   return (
@@ -71,15 +90,16 @@ export default function App() {
         <Setup onStart={start} voices={voices} canEnumerate={canEnumerate} />
       )}
       {screen.name === "run" && (
-        <Run run={screen.run} onFinish={(results) => finish(screen.run, results)} />
+        <Run run={screen.run} onFinish={(transcripts) => finish(screen.run, transcripts)} />
       )}
       {screen.name === "results" && (
         <Results
-          title={screen.run.title}
-          language={screen.run.language}
-          mode={screen.run.mode}
-          chunks={screen.run.chunks}
-          results={screen.results}
+          title={screen.record.title}
+          language={screen.record.language}
+          mode={screen.record.mode}
+          chunks={screen.record.chunks}
+          results={screen.record.results}
+          onMark={mark}
           onAgain={() => setScreen({ name: "run", run: screen.run })}
           onSetup={() => setScreen({ name: "setup" })}
         />

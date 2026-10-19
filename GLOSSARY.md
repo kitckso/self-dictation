@@ -86,8 +86,9 @@ _Avoid_: Hint, annotation, furigana, transliteration
 
 **Reveal**:
 The moment a Transcript is compared against its Reference and the Reference
-becomes visible. A Reveal ends the attempt at one Chunk and shows the Overlay
-alongside it.
+becomes visible. Every Reveal in a Run happens at the end of it, on Results,
+once the whole Passage has been dictated — a Reveal part-way through would hand
+over the rest of the Passage still to come.
 _Avoid_: Answering, checking, grading
 
 **Grading**:
