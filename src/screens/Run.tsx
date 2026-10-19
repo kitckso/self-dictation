@@ -47,8 +47,8 @@ function defaultAnswerOn(lang: LanguageId): AnswerOn {
 }
 
 /**
- * Layout B from the prototype: every Chunk visible as a numbered slot so you
- * can see how much is left without seeing a word of it.
+ * Every Chunk visible as a numbered slot so you can see how much is left
+ * without seeing a word of it.
  *
  * Nothing about the material appears here — no Reference, no score. Listen,
  * write it down, and the whole Passage is revealed at once on Results.
