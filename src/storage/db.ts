@@ -14,7 +14,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  const pending = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -30,7 +30,15 @@ function open(): Promise<IDBDatabase> {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
-  return dbPromise;
+  dbPromise = pending;
+  // A failure must not be cached for the life of the page. A store blocked in
+  // one tab, or a private window that has just been allowed, may well work on
+  // the next attempt, and a cached rejection would make the failure permanent
+  // for everyone still in this tab.
+  void pending.catch(() => {
+    if (dbPromise === pending) dbPromise = null;
+  });
+  return pending;
 }
 
 function tx<T>(

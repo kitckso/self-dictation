@@ -170,4 +170,35 @@ describe("History", () => {
 
     expect(onBack).toHaveBeenCalled();
   });
+
+  describe("when the store cannot be read", () => {
+    it("says so rather than waiting for ever", async () => {
+      vi.mocked(listRuns).mockRejectedValue(new Error("blocked"));
+      renderHistory();
+
+      expect(await screen.findByText(/could not be read/i)).toBeTruthy();
+    });
+
+    it("still offers a way out", async () => {
+      // A blocked store will not fix itself, so a screen that only waits for
+      // it leaves the person stuck until they reload.
+      vi.mocked(listRuns).mockRejectedValue(new Error("blocked"));
+      const onBack = vi.fn();
+      renderHistory({ onBack });
+
+      fireEvent.click(await screen.findByRole("button", { name: /New dictation/i }));
+
+      expect(onBack).toHaveBeenCalled();
+    });
+
+    it("tells the app that the store is broken", async () => {
+      vi.mocked(listRuns).mockRejectedValue(new Error("blocked"));
+      const onStorageFail = vi.fn();
+      renderHistory({ onStorageFail });
+
+      await screen.findByText(/could not be read/i);
+
+      expect(onStorageFail).toHaveBeenCalled();
+    });
+  });
 });
