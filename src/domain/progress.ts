@@ -1,4 +1,4 @@
-import { grade, scoreChunk, scoreRun } from "./grading";
+import { grade, scoreChunk, scoreRun, WRONG_BELOW } from "./grading";
 import type { LanguageId, Mode, Outcome, Run } from "./types";
 
 /**
@@ -8,15 +8,6 @@ import type { LanguageId, Mode, Outcome, Run } from "./types";
  * A Weakness is a property of the material rather than of a Run, so it outlives
  * the Run that revealed it. That is what makes it worth coming back to.
  */
-
-/**
- * The accuracy at which a graded Transcript counts as answered wrongly.
- *
- * The same figure Results uses to turn the score red, so a Run that looked bad
- * on screen and a Weakness that looks bad in the Progress agree with each
- * other.
- */
-export const WRONG_BELOW = 0.8;
 
 /** How one Chunk was answered. */
 export type Answer = "right" | "wrong" | "partial" | "none";

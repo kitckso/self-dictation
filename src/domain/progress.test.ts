@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { WRONG_BELOW } from "./grading";
 import {
   classify,
   drillText,
@@ -7,7 +8,6 @@ import {
   runText,
   summarise,
   weaknesses,
-  WRONG_BELOW,
 } from "./progress";
 import type { ChunkResult, LanguageId, Mode, Run } from "./types";
 

@@ -8,7 +8,7 @@ import { Results } from "./Results";
 type Mark = Omit<ChunkResult, "index">;
 
 /** Marks live in the App, so the harness stands in for it. */
-function Harness({ initial }: { initial: Mark[] }) {
+function Harness({ initial, chunks = ["圖書館", "醫院"] }: { initial: Mark[]; chunks?: string[] }) {
   const [results, setResults] = useState<ChunkResult[]>(() =>
     initial.map((r, index) => ({ ...r, index })),
   );
@@ -17,7 +17,7 @@ function Harness({ initial }: { initial: Mark[] }) {
       title="Lesson 1"
       language="zh"
       mode="vocab"
-      chunks={["圖書館", "醫院"]}
+      chunks={chunks}
       results={results}
       onMark={(i, outcome) =>
         setResults((prev) => prev.map((r, j) => (j === i ? { ...r, outcome } : r)))
@@ -111,5 +111,26 @@ describe("Results", () => {
     );
 
     expect(screen.queryByRole("button", { name: /✓ all/ })).toBeNull();
+  });
+
+  it("marks a score right at the same point a Weakness is counted as wrong", () => {
+    // Exactly at the threshold is still right. Results and Progress take the
+    // figure from one place, but a second copy of it is exactly how they
+    // would come to disagree.
+    render(
+      <Harness chunks={["圖書館館館"]} initial={[{ transcript: "圖書館館", outcome: null }]} />,
+    );
+
+    const score = screen.getByText("80%");
+
+    expect(score.getAttribute("style")).toContain("--ok");
+  });
+
+  it("marks a score wrong below that same point", () => {
+    render(<Harness chunks={["圖書館館館"]} initial={[{ transcript: "圖書館", outcome: null }]} />);
+
+    const score = screen.getByText("60%");
+
+    expect(score.getAttribute("style")).toContain("--bad");
   });
 });

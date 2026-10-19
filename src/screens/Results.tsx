@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { grade, scoreChunk, scoreRun } from "../domain/grading";
+import { grade, scoreChunk, scoreRun, WRONG_BELOW } from "../domain/grading";
 import {
   languageById,
   type ChunkResult,
@@ -71,7 +71,10 @@ export function Results({
   return (
     <div className="pad stack res">
       <header>
-        <div className="big" style={{ color: (overall ?? 0) < 0.8 ? "var(--bad)" : "var(--ok)" }}>
+        <div
+          className="big"
+          style={{ color: (overall ?? 0) < WRONG_BELOW ? "var(--bad)" : "var(--ok)" }}
+        >
           {overall === null ? "—" : `${Math.round(overall * 100)}%`}
         </div>
         <h2 style={{ marginTop: 10 }}>Run complete</h2>

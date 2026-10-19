@@ -22,6 +22,16 @@ export interface Grade {
  */
 export const MAX_GRADE_CHARS = 1024;
 
+/**
+ * The accuracy at which a graded Transcript counts as answered wrongly.
+ *
+ * This is where grading and progress meet: a score below it is coloured red
+ * on Results, and an answer below it is counted as a Wrong in Progress. One
+ * figure so a Run that looked bad on screen and a Weakness that looks bad in
+ * the Progress cannot disagree.
+ */
+export const WRONG_BELOW = 0.8;
+
 /** Fold one character for comparison. Chinese has no case, so this is a no-op there. */
 function foldCase(char: string): string {
   return char.toLowerCase();
