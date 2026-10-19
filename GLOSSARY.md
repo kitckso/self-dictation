@@ -95,10 +95,11 @@ then mark yourself when the Reference is revealed. Never produces a Transcript.
 _Avoid_: Handwriting, offline answer, written answer
 
 **Overlay**:
-A phonetic support layer — Jyutping for Cantonese, Pinyin for Mandarin — shown
-once the Reference is revealed, to help a person read what they misheard. An
-Overlay is never shown while dictating, because it reveals the answer as
-effectively as the Reference does.
+A phonetic support layer — Jyutping for Cantonese, Pinyin for Mandarin — that
+would be shown once the Reference is revealed, to help a person read what they
+misheard. Not built yet, so the term is held open for it. An Overlay would
+never be shown while dictating, because it reveals the answer as effectively as
+the Reference does.
 _Avoid_: Hint, annotation, furigana, transliteration
 
 **Reveal**:

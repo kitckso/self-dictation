@@ -9,9 +9,8 @@ Built for phones and tablets, and usable offline once installed.
 ## Why it works this way
 
 **Nothing is shown while you answer.** Dictating with the text visible is
-copying, not dictation. Neither the Reference nor the Jyutping/Pinyin overlay
-appears until the Run is over — the whole Passage is revealed at once, so
-nothing you are still working on can leak.
+copying, not dictation. No Reference appears until the Run is over — the whole
+Passage is revealed at once, so nothing you are still working on can leak.
 
 **Typing is a trap for Chinese.** Typing 今日 through pinyin, Cangjie or any
 input method produces the correct characters _without you knowing how to form
