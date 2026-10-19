@@ -43,17 +43,75 @@ function toOptions(voices: SpeechSynthesisVoice[]): VoiceOption[] {
   }));
 }
 
-async function getVoices(): Promise<SpeechSynthesisVoice[]> {
+/**
+ * The device's voice list, read once.
+ *
+ * `speak()` needs a voice on every utterance and `listVoices` on setup, so
+ * without this each one would re-read the list — and on the slow path that
+ * means stacking another `voiceschanged` listener and another two-second timer
+ * per utterance. The list only changes when the platform says so, so it is
+ * cached and dropped when `voiceschanged` fires.
+ */
+let voicesCache: SpeechSynthesisVoice[] | null = null;
+let voicesRead: Promise<SpeechSynthesisVoice[]> | null = null;
+/** The platform's change-notice listener, attached once for the page's life. */
+let watching = false;
+
+function invalidateVoices(): void {
+  voicesCache = null;
+  voicesRead = null;
+}
+
+/**
+ * Installing or removing a language pack changes the list long after setup, so
+ * one listener lives for the page rather than a fresh one per read. This is the
+ * opposite trade to the per-read listener it replaced: that was N listeners and
+ * N timeouts per burst of utterances, this is one of each.
+ */
+function watchForChanges(): void {
+  if (watching) return;
   const s = synth();
-  if (!s) return [];
+  if (!s) return;
+  watching = true;
+  s.addEventListener("voiceschanged", invalidateVoices);
+}
+
+function getVoices(): Promise<SpeechSynthesisVoice[]> {
+  if (voicesCache) return Promise.resolve(voicesCache);
+  // A read is already under way: share it rather than start a second.
+  if (voicesRead) return voicesRead;
+
+  const s = synth();
+  if (!s) return Promise.resolve([]);
+
+  watchForChanges();
+
   const immediate = s.getVoices();
-  if (immediate.length > 0) return immediate;
-  return new Promise((resolve) => {
-    const done = () => resolve(s.getVoices());
-    s.addEventListener("voiceschanged", done, { once: true });
-    // Safari occasionally never fires it; don't hang the UI forever.
-    setTimeout(() => resolve(s.getVoices()), 2000);
+  if (immediate.length > 0) {
+    voicesCache = immediate;
+    return Promise.resolve(immediate);
+  }
+
+  const pending: Promise<SpeechSynthesisVoice[]> = new Promise<SpeechSynthesisVoice[]>(
+    (resolve) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = () => {
+        clearTimeout(timer);
+        s.removeEventListener("voiceschanged", done);
+        const found = s.getVoices();
+        voicesCache = found;
+        resolve(found);
+      };
+      s.addEventListener("voiceschanged", done);
+      // Safari occasionally never fires it; don't hang the UI forever.
+      timer = setTimeout(done, 2000);
+    },
+  ).finally(() => {
+    if (voicesRead === pending) voicesRead = null;
   });
+
+  voicesRead = pending;
+  return pending;
 }
 
 /**
