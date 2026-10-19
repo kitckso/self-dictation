@@ -187,8 +187,8 @@ describe("grade diff shape", () => {
     const g = grade("abcdef", "xbcdy");
 
     expect(kinds(g.parts, "hit")).toBe("bcd");
-    // On a tie the walk emits the invented character before the missing one, so
-    // an extra can appear ahead of the Reference character it displaced.
-    expect(shape(g.parts)).toBe("x:extra a:miss b:hit c:hit d:hit y:extra e:miss f:miss");
+    // The Reference stays in order, and an invented character is shown where
+    // it was written rather than ahead of the character it displaced.
+    expect(shape(g.parts)).toBe("a:miss x:extra b:hit c:hit d:hit e:miss f:miss y:extra");
   });
 });

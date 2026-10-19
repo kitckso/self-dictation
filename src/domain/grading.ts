@@ -87,7 +87,11 @@ export function grade(reference: string, transcript: string): Grade {
       hits++;
       i++;
       j++;
-    } else if (j < m && (dp[i]?.[j + 1] ?? 0) >= (dp[i + 1]?.[j] ?? 0)) {
+    } else if (j < m && (dp[i]?.[j + 1] ?? 0) > (dp[i + 1]?.[j] ?? 0)) {
+      // Strictly greater, so that a tie puts the miss first. Both paths find
+      // the same number of hits, but emitting the miss first keeps the
+      // Reference in order and puts the invented character where it was
+      // written, rather than ahead of the character it displaced.
       parts.push({ char: b[j] ?? "", kind: "extra" });
       j++;
     } else {
