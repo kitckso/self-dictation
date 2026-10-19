@@ -44,12 +44,16 @@ export function languageById(id: LanguageId): Language {
   return found;
 }
 
-/** What Setup hands over to begin a Run. */
-export interface StartInput {
-  title: string;
+/** Material the Setup screen starts with. */
+export interface SetupFill {
   language: LanguageId;
   mode: Mode;
+  title: string;
   text: string;
+}
+
+/** What Setup hands over to begin a Run. */
+export interface StartInput extends SetupFill {
   /** Null when the browser could not save the Collection. */
   collectionId: string | null;
 }
