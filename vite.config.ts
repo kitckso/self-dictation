@@ -9,7 +9,7 @@ export default defineConfig({
   fmt: {},
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
   plugins: [
     react(),

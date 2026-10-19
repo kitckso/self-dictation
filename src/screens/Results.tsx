@@ -1,6 +1,5 @@
-import { scoreChunk, scoreRun } from "../domain/grading";
+import { grade, scoreChunk, scoreRun } from "../domain/grading";
 import { languageById, type LanguageId, type Mode, type Outcome } from "../domain/types";
-import { diffHtml } from "../lib/diffHtml";
 
 interface Props {
   title: string;
@@ -20,9 +19,18 @@ const OUTCOMES: { id: Outcome; label: string }[] = [
 ];
 
 /**
- * The end of a Run: every Reference appears at once, alongside what was typed
- * and a self-mark for what was written on paper. The score is the mean of the
- * two, so it keeps changing while marking is still in progress.
+ * The Reference split into characters for display: a typed Transcript's hits
+ * are plain, its misses and extras flagged. Only used when something was typed —
+ * with nothing to compare there is nothing to mark.
+ */
+function diffParts(reference: string, transcript: string) {
+  return grade(reference, transcript).parts;
+}
+
+/**
+ * The end of a Run: every Reference appears at once, beside what was typed and
+ * a self-mark for what was written on paper. The score is the mean of the two,
+ * so it keeps changing while marking is still in progress.
  */
 export function Results({
   title,
@@ -61,7 +69,15 @@ export function Results({
               <p className="note" style={{ marginBottom: 6 }}>
                 {i + 1} · {typed ? `${Math.round((scores[i] ?? 0) * 100)}% typed` : "on paper"}
               </p>
-              <p className="ref">{diffHtml(chunk, r.transcript)}</p>
+              <p className="ref">
+                {typed
+                  ? diffParts(chunk, r.transcript).map((part, k) => (
+                      <span key={k} className={`tok ${part.kind}`}>
+                        {part.char}
+                      </span>
+                    ))
+                  : chunk}
+              </p>
               {!typed && (
                 <div className="mark-row">
                   {OUTCOMES.map((o) => (
