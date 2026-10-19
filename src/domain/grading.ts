@@ -17,6 +17,17 @@ export interface Grade {
 }
 
 /**
+ * The longest comparison worth making. Well clear of CHUNK_CHAR_CAP, but low
+ * enough that the table stays a few megabytes: see `grade`.
+ */
+export const MAX_GRADE_CHARS = 1024;
+
+/** Fold one character for comparison. Chinese has no case, so this is a no-op there. */
+function foldCase(char: string): string {
+  return char.toLowerCase();
+}
+
+/**
  * Character-level comparison of a Transcript against a Reference.
  *
  * Only meaningful when the person actually typed an answer — see Outcome for
@@ -30,12 +41,37 @@ export function grade(reference: string, transcript: string): Grade {
   const n = a.length;
   const m = b.length;
 
+  // The table below is quadratic: n * m cells, four bytes each. A Chunk cannot
+  // reach this size — `toChunks` holds every one of them to CHUNK_CHAR_CAP —
+  // so this only catches a caller that skipped it. Past the cap the honest
+  // answer is that nothing could be compared; building the table anyway turns a
+  // grade into a frozen tab, which is how a pasted 50,000-character Vocabulary
+  // Item would have killed the browser.
+  if (n > MAX_GRADE_CHARS || m > MAX_GRADE_CHARS) {
+    return {
+      parts: [
+        ...a.map((char): DiffPart => ({ char, kind: "miss" })),
+        ...b.map((char): DiffPart => ({ char, kind: "extra" })),
+      ],
+      accuracy: 0,
+      missing: n,
+      extra: m,
+    };
+  }
+
   // Longest common subsequence, walked backwards.
+  //
+  // Case is folded for the comparison only. A synthesised voice gives no signal
+  // about capitalisation and nobody types one deliberately, so "hello there"
+  // against the Reference "Hello, there!" is a perfect answer. What is displayed
+  // stays the Reference's own spelling, so the diff still shows the capital.
+  const ka = a.map(foldCase);
+  const kb = b.map(foldCase);
   const dp: Int32Array[] = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
       dp[i][j] =
-        a[i] === b[j]
+        ka[i] === kb[j]
           ? (dp[i + 1][j + 1] ?? 0) + 1
           : Math.max(dp[i + 1][j] ?? 0, dp[i][j + 1] ?? 0);
     }
@@ -46,7 +82,7 @@ export function grade(reference: string, transcript: string): Grade {
   let j = 0;
   let hits = 0;
   while (i < n) {
-    if (j < m && a[i] === b[j]) {
+    if (j < m && ka[i] === kb[j]) {
       parts.push({ char: a[i] ?? "", kind: "hit" });
       hits++;
       i++;
