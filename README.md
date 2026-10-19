@@ -58,9 +58,11 @@ Screen", or host `dist/` on any static host.
    **Auto-play** walks the Run for you: the bottom bar sets how many times each
    Chunk is spoken, how long to pause before the next play or repeat, and how
    fast the Voice speaks — 2 times, 5 seconds, and its natural pace to begin
-   with. Speed applies to every play, not just auto-play, and a play already
-   under way finishes at the speed it started at. Auto-play stops when you
-   touch a speech control, move the cursor, or reach the end.
+   with. Speed applies to every play, not just auto-play. Changing a setting
+   never interrupts the play under way — it finishes as it began — and the
+   change lands on the next play for Speed, on the next Chunk for repeats and
+   pause. Auto-play stops when you touch a speech control, move the cursor, or
+   reach the end.
 3. **Results** — every Reference appears at once, beside what you typed and a
    diff of the two, or the ✓ all / ~ some / ✗ wrong buttons for what you wrote
    on paper. The score is the mean of both and settles as you mark.

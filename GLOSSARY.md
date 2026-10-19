@@ -66,8 +66,10 @@ _Avoid_: Segment, fragment, line, step, block
 
 **Speed**:
 A share of a Voice's natural pace at which a Run is spoken, chosen for the Run
-and forgotten when it ends. The device may clamp or ignore it, so a Speed is a
-request to the Voice rather than a promise about what will be heard.
+and forgotten when it ends. A play already under way finishes at the Speed it
+began with; the next play — a repeat, or the next Chunk — uses the new one. The
+device may clamp or ignore it, so a Speed is a request to the Voice rather than
+a promise about what will be heard.
 _Avoid_: Rate, tempo, playback speed
 
 **Reference**:

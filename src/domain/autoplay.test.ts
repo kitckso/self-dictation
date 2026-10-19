@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampDelay, clampRepeats, MAX_DELAY_SEC, MAX_REPEATS, playSequence } from "./autoplay";
+import { chunkSteps, clampDelay, clampRepeats, MAX_DELAY_SEC, MAX_REPEATS } from "./autoplay";
 
 describe("clampRepeats", () => {
   it("keeps a sane number of repeats", () => {
@@ -38,37 +38,17 @@ describe("clampDelay", () => {
   });
 });
 
-describe("playSequence", () => {
-  it("speaks every Chunk once when repeats is 1", () => {
-    expect(playSequence(0, 3, 1, 2000)).toEqual([
-      { index: 0, repeat: 1, waitMs: 0 },
+describe("chunkSteps", () => {
+  it("speaks one Chunk the chosen number of times", () => {
+    expect(chunkSteps(1, 3, 2000, false)).toEqual([
       { index: 1, repeat: 1, waitMs: 2000 },
-      { index: 2, repeat: 1, waitMs: 2000 },
+      { index: 1, repeat: 2, waitMs: 2000 },
+      { index: 1, repeat: 3, waitMs: 2000 },
     ]);
   });
 
-  it("repeats each Chunk before moving on", () => {
-    expect(playSequence(0, 2, 2, 1000)).toEqual([
-      { index: 0, repeat: 1, waitMs: 0 },
-      { index: 0, repeat: 2, waitMs: 1000 },
-      { index: 1, repeat: 1, waitMs: 1000 },
-      { index: 1, repeat: 2, waitMs: 1000 },
-    ]);
-  });
-
-  it("starts from the Chunk the cursor is on", () => {
-    expect(playSequence(2, 4, 1, 0).map((s) => s.index)).toEqual([2, 3]);
-  });
-
-  it("does not wait before the very first play", () => {
-    expect(playSequence(1, 3, 1, 5000)[0]?.waitMs).toBe(0);
-  });
-
-  it("has nothing to play at the end of the Run", () => {
-    expect(playSequence(3, 3, 2, 1000)).toEqual([]);
-  });
-
-  it("treats a zero delay as playing straight through", () => {
-    expect(playSequence(0, 2, 2, 0).every((s) => s.waitMs === 0)).toBe(true);
+  it("does not wait before the very first play of the Run", () => {
+    expect(chunkSteps(0, 2, 5000, true)[0]?.waitMs).toBe(0);
+    expect(chunkSteps(0, 2, 5000, false)[0]?.waitMs).toBe(5000);
   });
 });

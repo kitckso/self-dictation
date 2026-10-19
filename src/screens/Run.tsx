@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  chunkSteps,
   clampDelay,
   clampRepeats,
   MAX_DELAY_SEC,
   MAX_REPEATS,
   MIN_REPEATS,
-  playSequence,
 } from "../domain/autoplay";
 import { significantLength } from "../domain/chunking";
 import { DEFAULT_RATE, formatRate, MAX_RATE, MIN_RATE, stepRate } from "../domain/rate";
@@ -63,11 +63,13 @@ export function Run({ run, onFinish }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const tag = speakTag(run.language);
   const typedCount = Object.values(transcripts).filter((t) => t.trim()).length;
+  /** Anything at all is speaking, so every play control now means stop. */
+  const playing = auto || speaking !== null;
   /**
    * The rail's play button is a glyph to save width, so its name has to say
    * what the glyph means — including which Chunk it would speak.
    */
-  const playLabel = auto || speaking === cursor ? "Stop" : `Speak chunk ${cursor + 1}`;
+  const playLabel = playing ? "Stop" : `Speak chunk ${cursor + 1}`;
 
   /**
    * Whoever bumps this owns the speaker. A tap, a stop, or the effect being
@@ -78,18 +80,21 @@ export function Run({ run, onFinish }: Props) {
   /** Where auto-play should start; read without making the effect depend on the cursor. */
   const cursorRef = useRef(cursor);
   /**
-   * The speed every play reads. Deliberately a ref rather than a dependency of
-   * the auto-play effect: the one play already under way finishes at the speed
-   * it began at, and the next one — a repeat, or the next Chunk — uses the new
-   * one. Retuning an utterance in flight is not possible anyway.
+   * The settings auto-play reads, deliberately held in a ref rather than named
+   * as dependencies of the loop.
+   *
+   * A play already under way cannot be retuned, and tearing the loop down to
+   * pick up a new setting would start the Chunk over. So the repeat count and
+   * the pause are read once per Chunk and the Speed once per play: whatever is
+   * being heard finishes as it began.
    */
-  const rateRef = useRef(rate);
+  const settings = useRef({ rate, repeats, delaySec });
 
   useEffect(() => () => webSpeech.cancel(), []);
 
   useEffect(() => {
-    rateRef.current = rate;
-  }, [rate]);
+    settings.current = { rate, repeats, delaySec };
+  }, [rate, repeats, delaySec]);
 
   useEffect(() => {
     cursorRef.current = cursor;
@@ -104,25 +109,33 @@ export function Run({ run, onFinish }: Props) {
     if (!auto) return;
     const gen = ++playGen.current;
     const mine = () => gen === playGen.current;
-    const steps = playSequence(cursorRef.current, run.chunks.length, repeats, delaySec * 1000);
+    const chunks = run.chunks;
 
     void (async () => {
-      for (const step of steps) {
-        if (!mine()) return;
-        if (step.waitMs > 0) {
-          await sleep(step.waitMs);
+      // Planned one Chunk at a time, so repeats and pause are read when the
+      // next Chunk starts rather than by restarting the one already speaking.
+      // Speed is not part of the plan: it is read per play, just below.
+      let firstPlay = true;
+      for (let index = cursorRef.current; index < chunks.length; index++) {
+        const { repeats: times, delaySec: pause } = settings.current;
+        for (const step of chunkSteps(index, times, pause * 1000, firstPlay)) {
           if (!mine()) return;
+          if (step.waitMs > 0) {
+            await sleep(step.waitMs);
+            if (!mine()) return;
+          }
+          firstPlay = false;
+          setCursor(step.index);
+          setSpeaking(step.index);
+          setSpeechError(null);
+          await webSpeech.speak(chunks[step.index] ?? "", {
+            lang: tag,
+            rate: settings.current.rate,
+            onError: (reason) => {
+              if (mine()) setSpeechError(reason);
+            },
+          });
         }
-        setCursor(step.index);
-        setSpeaking(step.index);
-        setSpeechError(null);
-        await webSpeech.speak(run.chunks[step.index] ?? "", {
-          lang: tag,
-          rate: rateRef.current,
-          onError: (reason) => {
-            if (mine()) setSpeechError(reason);
-          },
-        });
       }
       if (!mine()) return;
       setSpeaking(null);
@@ -132,7 +145,7 @@ export function Run({ run, onFinish }: Props) {
     return () => {
       playGen.current += 1;
     };
-  }, [auto, repeats, delaySec, run.chunks, tag]);
+  }, [auto, run.chunks, tag]);
 
   /** Silence whoever is speaking and forget them. */
   function stopPlayback() {
@@ -155,7 +168,7 @@ export function Run({ run, onFinish }: Props) {
 
   async function speak(i: number) {
     // While something is already playing, the button reads "stop" — so stop.
-    if (auto || speaking !== null) {
+    if (playing) {
       stopPlayback();
       return;
     }
@@ -165,7 +178,7 @@ export function Run({ run, onFinish }: Props) {
     try {
       await webSpeech.speak(run.chunks[i] ?? "", {
         lang: tag,
-        rate: rateRef.current,
+        rate: settings.current.rate,
         onError: (reason) => setSpeechError(reason),
       });
     } finally {
@@ -339,7 +352,7 @@ export function Run({ run, onFinish }: Props) {
             title={playLabel}
             onClick={() => void speak(cursor)}
           >
-            {auto || speaking === cursor ? "■" : "▶"}
+            {playing ? "■" : "▶"}
           </button>
           <button className="rail-btn" onClick={back} disabled={cursor === 0}>
             ↑

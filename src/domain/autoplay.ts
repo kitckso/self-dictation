@@ -2,8 +2,8 @@
  * Auto-play: the Run is spoken hands-free, Chunk after Chunk.
  *
  * Only the ordering lives here — no timers, no speech. The Run screen walks
- * this sequence and does the actual speaking, which keeps the part worth
- * testing free of browser APIs.
+ * these steps and does the actual speaking, which keeps the part worth testing
+ * free of browser APIs.
  */
 
 export const MIN_REPEATS = 1;
@@ -30,25 +30,25 @@ export function clampDelay(n: number): number {
 }
 
 /**
- * Every play of a Run, in order: each Chunk from `from` to the end, spoken
- * `repeats` times, with `delayMs` of silence between one play and the next —
- * whether that next play is a repeat or the following Chunk.
+ * The plays for a single Chunk: `repeats` of it, each preceded by `delayMs` of
+ * silence. `firstPlay` is true only for the first play of the Run, which never
+ * waits — pressing play should not be a silent pause.
  *
- * The first play has no delay, so pressing play is never a silent pause.
+ * Auto-play plans a Run one Chunk at a time through this. That is what lets a
+ * change to repeats or pause take effect on the next Chunk instead of
+ * restarting the one already under way.
  */
-export function playSequence(
-  from: number,
-  chunkCount: number,
+export function chunkSteps(
+  index: number,
   repeats: number,
   delayMs: number,
+  firstPlay: boolean,
 ): PlayStep[] {
   const times = clampRepeats(repeats);
   const wait = Math.max(0, delayMs);
   const steps: PlayStep[] = [];
-  for (let index = Math.max(0, from); index < chunkCount; index++) {
-    for (let repeat = 1; repeat <= times; repeat++) {
-      steps.push({ index, repeat, waitMs: steps.length === 0 ? 0 : wait });
-    }
+  for (let repeat = 1; repeat <= times; repeat++) {
+    steps.push({ index, repeat, waitMs: firstPlay && repeat === 1 ? 0 : wait });
   }
   return steps;
 }
