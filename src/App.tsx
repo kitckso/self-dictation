@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toChunks } from "./domain/chunking";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
 import type { LanguageId, Mode, Outcome, Run as RunRecord } from "./domain/types";
@@ -21,15 +21,21 @@ type Screen =
  * `waiting` only ever applies to a visitor who arrived with a payload, so an
  * ordinary visit still draws Setup on the first frame.
  */
-type Arrival = "none" | "waiting" | "broken" | { setup: SharedSetup };
+type Arrival =
+  | { kind: "none" }
+  | { kind: "waiting" }
+  | { kind: "broken" }
+  | { kind: "shared"; payload: string; setup: SharedSetup };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: "setup" });
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [canEnumerate, setCanEnumerate] = useState<boolean | null>(null);
   const [arrival, setArrival] = useState<Arrival>(() =>
-    payloadFromHash(window.location.hash) ? "waiting" : "none",
+    payloadFromHash(window.location.hash) ? { kind: "waiting" } : { kind: "none" },
   );
+  /** Bumped per read, so a stale decode cannot answer for a newer link. */
+  const readGen = useRef(0);
 
   useEffect(() => {
     if (!isSupported()) {
@@ -41,17 +47,28 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const payload = payloadFromHash(window.location.hash);
-    if (!payload) return;
-    let live = true;
-    void decodeSetup(payload).then((setup) => {
-      // A link we cannot read is worth saying out loud: silence would look like
-      // an empty Setup, and the recipient would not know to ask for the text.
-      if (live) setArrival(setup ? { setup } : "broken");
-    });
-    return () => {
-      live = false;
-    };
+    /**
+     * A link can also arrive without a page load: pasting one into the tab you
+     * are already in is a fragment change, and nothing else would notice it.
+     */
+    function readHash() {
+      const payload = payloadFromHash(window.location.hash);
+      // A fragment that is not ours is not news. Leave the screen alone.
+      if (!payload) return;
+      const gen = ++readGen.current;
+      setArrival({ kind: "waiting" });
+      void decodeSetup(payload).then((setup) => {
+        if (gen !== readGen.current) return;
+        // A link we cannot read is worth saying out loud: silence would look
+        // like an empty Setup, and the recipient would not know to ask for the
+        // text instead.
+        setArrival(setup ? { kind: "shared", payload, setup } : { kind: "broken" });
+      });
+    }
+
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
   }, []);
 
   function start(input: {
@@ -113,15 +130,18 @@ export default function App() {
   return (
     <div className="app">
       {screen.name === "setup" &&
-        (arrival === "waiting" ? (
+        (arrival.kind === "waiting" ? (
           <p className="note pad">Opening the shared dictation…</p>
         ) : (
           <Setup
+            // A different link is a different Setup: keying on the payload makes
+            // the form start again from it rather than keep the old answers.
+            key={arrival.kind === "shared" ? arrival.payload : "blank"}
             onStart={start}
             voices={voices}
             canEnumerate={canEnumerate}
-            shared={typeof arrival === "object" ? arrival.setup : null}
-            shareBroken={arrival === "broken"}
+            shared={arrival.kind === "shared" ? arrival.setup : null}
+            shareBroken={arrival.kind === "broken"}
           />
         ))}
       {screen.name === "run" && (

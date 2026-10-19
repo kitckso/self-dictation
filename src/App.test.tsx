@@ -56,6 +56,23 @@ describe("App", () => {
     expect(await screen.findByText(/could not be read/i)).toBeTruthy();
   });
 
+  it("opens a second link pasted into the same tab", async () => {
+    const second: SharedSetup = {
+      language: "en",
+      mode: "vocab",
+      title: "Lesson 2",
+      text: "library\nhospital",
+    };
+    await arriveFrom(shared);
+    render(<App />);
+    expect(await screen.findByText(/opened from a shared link/i)).toBeTruthy();
+
+    await arriveFrom(second);
+
+    expect(await screen.findByDisplayValue("Lesson 2")).toBeTruthy();
+    expect(document.querySelector("textarea")?.value).toBe(second.text);
+  });
+
   it("does not hold up an ordinary visit", () => {
     render(<App />);
 
