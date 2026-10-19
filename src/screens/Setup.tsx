@@ -48,6 +48,14 @@ function hasVoiceFor(voices: VoiceOption[], id: LanguageId): boolean {
   });
 }
 
+/**
+ * Whether two Collection titles name the same saved Collection. Titles are the
+ * only handle the person has, so matching ignores surrounding space and case.
+ */
+function sameTitle(a: string, b: string): boolean {
+  return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+}
+
 export function Setup({ onStart, voices, canEnumerate }: Props) {
   const [language, setLanguage] = useState<LanguageId>("yue");
   const [mode, setMode] = useState<Mode>("paragraph");
@@ -82,16 +90,24 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
   const chunks = useMemo(() => toChunks(text, mode, language), [text, mode, language]);
   const canStart = chunks.length > 0;
 
+  const nextTitle = title.trim() || `Untitled ${mode}`;
+  const existing = useMemo(
+    () => collections.find((c) => sameTitle(c.title, nextTitle)) ?? null,
+    [collections, nextTitle],
+  );
+
   async function save() {
     if (!canStart) return;
     const now = Date.now();
+    // Same title means same Collection: drilling a sample again should refresh
+    // the saved material, not pile up identical rows.
     const c: Collection = {
-      id: newId(),
-      title: title.trim() || `Untitled ${mode}`,
+      id: existing?.id ?? newId(),
+      title: nextTitle,
       language,
       mode,
       text,
-      createdAt: now,
+      createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
     // Persistence is a convenience, never a precondition — a failed write
@@ -263,7 +279,9 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
       </button>
       {canStart && (
         <p className="note" style={{ textAlign: "center" }}>
-          Saves to this browser so you can drill it again.
+          {existing
+            ? `Updates the saved collection “${existing.title}”.`
+            : "Saves to this browser so you can drill it again."}
         </p>
       )}
     </div>

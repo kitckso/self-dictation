@@ -46,7 +46,9 @@ Screen", or host `dist/` on any static host.
 ## How a session goes
 
 1. **Setup** — pick a Language, a Mode, and paste your content. Saved material
-   is kept in the browser so you can drill it again later.
+   is kept in the browser so you can drill it again later. Starting with a
+   title that is already saved overwrites that Collection rather than adding a
+   duplicate, so re-drilling a sample refreshes it in place.
 2. **Run** — each Chunk gets its own numbered slot so you can see how much is
    left without seeing a word of it. Speak, write, reveal, mark. Navigation
    never moves past a Chunk on its own.
