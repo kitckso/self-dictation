@@ -116,6 +116,30 @@ describe("toChunks", () => {
       expect(chunks[1]).toBe(clause);
     });
 
+    /**
+     * A Chunk is spoken on its own, so a full stop that is not a sentence end
+     * would have the voice read "Mr." by itself, or "m." for "a.m.".
+     */
+    it("keeps a title and its name in one Chunk", () => {
+      expect(toChunks("Mr. Smith went home.", "paragraph")).toEqual(["Mr. Smith went home."]);
+    });
+
+    it("keeps a decimal point inside its number", () => {
+      expect(toChunks("The price is 3.5 dollars.", "paragraph")).toEqual([
+        "The price is 3.5 dollars.",
+      ]);
+    });
+
+    it("keeps a dotted abbreviation in one Chunk", () => {
+      expect(toChunks("Dr. Chen called at 9 a.m. today.", "paragraph")).toEqual([
+        "Dr. Chen called at 9 a.m. today.",
+      ]);
+    });
+
+    it("still splits on a real sentence end", () => {
+      expect(toChunks("One. Two. Three.", "paragraph")).toEqual(["One.", "Two.", "Three."]);
+    });
+
     it("returns nothing for an empty passage", () => {
       expect(toChunks("\n\n", "paragraph")).toEqual([]);
     });

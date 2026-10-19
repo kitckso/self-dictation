@@ -1,4 +1,5 @@
 import type { Mode } from "./types";
+import { toSentences } from "./sentences";
 
 /**
  * Longest a single Chunk may be. Chinese and English are chunked on sentence
@@ -12,8 +13,6 @@ const CJK = /[㐀-鿿豈-﫿]/;
 /** Chinese sentence enders, English ones, and their full-width forms. */
 const SENTENCE_END = new Set(["。", "！", "？", "!", "?", "．", "."]);
 const CLAUSE_END = new Set(["，", "、", "；", ",", ";", "：", ":"]);
-/** The same enders, for the Latin path, which splits on them one by one. */
-const LATIN_END = new Set([".", "!", "?"]);
 
 /** Split after the given punctuation, keeping it attached to the left part. */
 function splitAfter(text: string, enders: Set<string>): string[] {
@@ -78,17 +77,7 @@ export function toChunks(text: string, mode: Mode): string[] {
   }
 
   // Latin script: split on sentence enders.
-  const sentences = trimmed
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  // The lookbehind split can't see "end.Next" with no space, so guard it.
-  const repaired = sentences.flatMap((s) =>
-    splitAfter(s, LATIN_END).length > 1 ? splitAfter(s, LATIN_END) : [s],
-  );
-
-  return byLength(repaired).filter(Boolean);
+  return byLength(toSentences(trimmed)).filter(Boolean);
 }
 
 /**
