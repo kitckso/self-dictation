@@ -223,11 +223,6 @@ h2 {
   font-size: 26px;
   letter-spacing: -0.01em;
 }
-.su-head p {
-  margin: 6px 0 0;
-  color: var(--dim);
-  font-size: 14px;
-}
 
 .saved {
   display: flex;

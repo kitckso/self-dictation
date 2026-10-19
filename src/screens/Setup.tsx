@@ -109,7 +109,6 @@ export function Setup({ onStart, voices, canEnumerate }: Props) {
     <div className="pad stack">
       <header className="su-head">
         <h1>Self dictation</h1>
-        <p>Hear it, write it on paper. Nothing is shown while you answer.</p>
       </header>
 
       <section>
