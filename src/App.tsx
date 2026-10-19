@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toChunks } from "./domain/chunking";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
 import type { Outcome, Run as RunRecord, SetupFill, StartInput } from "./domain/types";
@@ -59,6 +59,12 @@ export default function App() {
    * starts again from it rather than keeping the old answers.
    */
   const [setupGen, setSetupGen] = useState(0);
+
+  /**
+   * The same function every time, so the screens that read the store on
+   * mount do not read it again on every render.
+   */
+  const storageFail = useCallback(() => setStorageBroken(true), []);
 
   useEffect(() => {
     if (!isSupported()) {
@@ -202,14 +208,14 @@ export default function App() {
             initial={arrival.kind === "shared" ? arrival.setup : fill}
             fromLink={arrival.kind === "shared"}
             shareBroken={arrival.kind === "broken"}
-            onStorageFail={() => setStorageBroken(true)}
+            onStorageFail={storageFail}
           />
         ))}
       {screen.name === "history" && (
         <History
           onBack={() => goSetup(null)}
           onDrill={(next) => goSetup(next)}
-          onStorageFail={() => setStorageBroken(true)}
+          onStorageFail={storageFail}
         />
       )}
       {screen.name === "run" && (
