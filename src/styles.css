@@ -252,6 +252,12 @@ h2 {
 .run-scroll {
   padding: 10px 14px 110px;
 }
+/* 110px reserves the rail. The settings panel stacks above the rail inside the
+   same fixed foot, so with it open the list needs room to scroll clear of it:
+   three 28px rows, the panel's own padding, and the foot's 6px gap. */
+.app:has(.auto-panel) .run-scroll {
+  padding-bottom: 240px;
+}
 .run-head {
   display: flex;
   align-items: baseline;
