@@ -25,6 +25,8 @@ interface Props {
   shared?: SharedSetup | null;
   /** The URL carried a dictation that could not be read. */
   shareBroken?: boolean;
+  /** A read or write failed, so the browser cannot keep anything. */
+  onStorageFail: () => void;
 }
 
 const SAMPLES: Record<Mode, Record<LanguageId, string>> = {
@@ -55,7 +57,14 @@ function hasVoiceFor(voices: VoiceOption[], id: LanguageId): boolean {
   });
 }
 
-export function Setup({ onStart, voices, canEnumerate, shared, shareBroken }: Props) {
+export function Setup({
+  onStart,
+  voices,
+  canEnumerate,
+  shared,
+  shareBroken,
+  onStorageFail,
+}: Props) {
   const [language, setLanguage] = useState<LanguageId>(shared?.language ?? "yue");
   const [mode, setMode] = useState<Mode>(shared?.mode ?? "paragraph");
   const [title, setTitle] = useState(shared?.title ?? "");
@@ -65,8 +74,10 @@ export function Setup({ onStart, voices, canEnumerate, shared, shareBroken }: Pr
   const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
-    void listCollections().then(setCollections);
-  }, []);
+    // An unreadable store is worth saying out loud rather than showing an empty
+    // list that looks like "you have not saved anything yet".
+    void listCollections().then(setCollections).catch(onStorageFail);
+  }, [onStorageFail]);
 
   function testVoice() {
     if (testState === "speaking") return;
@@ -110,6 +121,7 @@ export function Setup({ onStart, voices, canEnumerate, shared, shareBroken }: Pr
       setCollections(await listCollections());
     } catch {
       stored = false;
+      onStorageFail();
     }
     onStart({ title: c.title, language, mode, text, collectionId: stored ? c.id : null });
   }
@@ -266,7 +278,9 @@ export function Setup({ onStart, voices, canEnumerate, shared, shareBroken }: Pr
                 <button
                   className="rowbtn"
                   onClick={() =>
-                    void deleteCollection(c.id).then(() => listCollections().then(setCollections))
+                    void deleteCollection(c.id)
+                      .then(() => listCollections().then(setCollections))
+                      .catch(onStorageFail)
                   }
                 >
                   ✕

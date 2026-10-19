@@ -17,7 +17,15 @@ vi.mock("../storage/db", () => ({
 afterEach(cleanup);
 
 function renderSetup(props: Partial<Parameters<typeof Setup>[0]> = {}) {
-  return render(<Setup onStart={() => {}} voices={[]} canEnumerate={false} {...props} />);
+  return render(
+    <Setup
+      onStart={() => {}}
+      voices={[]}
+      canEnumerate={false}
+      onStorageFail={() => {}}
+      {...props}
+    />,
+  );
 }
 
 describe("Setup", () => {

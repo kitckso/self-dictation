@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
+import { listCollections, saveRun } from "./storage/db";
 
 vi.mock("./tts", () => ({
   isSupported: () => true,
@@ -36,6 +37,12 @@ async function arriveFrom(setup: SharedSetup) {
 afterEach(() => {
   cleanup();
   window.location.hash = "";
+  vi.clearAllMocks();
+});
+
+// jsdom has no layout, so element scrolling is a no-op rather than an error.
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 describe("App", () => {
@@ -79,5 +86,73 @@ describe("App", () => {
     // Nothing was shared, so there is nothing to wait for.
     expect(document.querySelector("textarea")).toBeTruthy();
     expect(screen.queryByText(/shared link/i)).toBeNull();
+  });
+
+  it("records when a Run began, not only when it ended", async () => {
+    // Every stored value Date.now() is asked for moves on by a second, so a Run
+    // that started and finished together would still be caught.
+    let tick = 0;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => 1_000 + tick++ * 1_000);
+
+    try {
+      await arriveFrom(shared);
+      render(<App />);
+      await screen.findByText(/opened from a shared link/i);
+
+      fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+
+      await waitFor(() => expect(saveRun).toHaveBeenCalled());
+      const record = vi.mocked(saveRun).mock.calls[0]![0];
+      expect(record.startedAt).toBeLessThan(record.finishedAt ?? 0);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("starts a second pass with a new time rather than reusing the first", async () => {
+    let tick = 0;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => 1_000 + tick++ * 1_000);
+
+    try {
+      await arriveFrom(shared);
+      render(<App />);
+      await screen.findByText(/opened from a shared link/i);
+
+      fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+      await screen.findByRole("button", { name: /run it again/i });
+
+      const first = vi.mocked(saveRun).mock.calls[0]![0].startedAt;
+
+      fireEvent.click(screen.getByRole("button", { name: /run it again/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+
+      await waitFor(() => expect(saveRun).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(saveRun).mock.calls[1]![0].startedAt).toBeGreaterThan(first);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("says so when the browser cannot save, instead of losing the Run quietly", async () => {
+    vi.mocked(listCollections).mockRejectedValueOnce(new Error("storage is blocked"));
+    render(<App />);
+
+    expect(await screen.findByText(/cannot save your work/i)).toBeTruthy();
+  });
+
+  it("still reaches Results when the Run could not be saved", async () => {
+    vi.mocked(saveRun).mockRejectedValue(new Error("quota exceeded"));
+    await arriveFrom(shared);
+    render(<App />);
+    await screen.findByText(/opened from a shared link/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+
+    // Persistence is a convenience, never a precondition: the reveal still happens.
+    expect(await screen.findByRole("button", { name: /run it again/i })).toBeTruthy();
+    expect(screen.getByText(/cannot save your work/i)).toBeTruthy();
   });
 });

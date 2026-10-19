@@ -36,14 +36,30 @@ export default function App() {
   );
   /** Bumped per read, so a stale decode cannot answer for a newer link. */
   const readGen = useRef(0);
+  /**
+   * Latched the first time anything fails to read or write IndexedDB.
+   *
+   * Private browsing, a blocked upgrade in another tab, and a full store all
+   * make persistence impossible. None of them should stop a dictation, but
+   * swallowing them silently would mean a Run that looks saved and is not.
+   */
+  const [storageBroken, setStorageBroken] = useState(false);
 
   useEffect(() => {
     if (!isSupported()) {
       setCanEnumerate(false);
       return;
     }
-    void webSpeech.listVoices().then(setVoices);
-    void webSpeech.canEnumerateVoices().then(setCanEnumerate);
+    // Either promise rejecting means the same thing to the person: the device
+    // cannot tell us what it has, so availability is genuinely unknown.
+    void webSpeech
+      .listVoices()
+      .then(setVoices)
+      .catch(() => setCanEnumerate(false));
+    void webSpeech
+      .canEnumerateVoices()
+      .then(setCanEnumerate)
+      .catch(() => setCanEnumerate(false));
   }, []);
 
   useEffect(() => {
@@ -57,13 +73,20 @@ export default function App() {
       if (!payload) return;
       const gen = ++readGen.current;
       setArrival({ kind: "waiting" });
-      void decodeSetup(payload).then((setup) => {
-        if (gen !== readGen.current) return;
-        // A link we cannot read is worth saying out loud: silence would look
-        // like an empty Setup, and the recipient would not know to ask for the
-        // text instead.
-        setArrival(setup ? { kind: "shared", payload, setup } : { kind: "broken" });
-      });
+      void decodeSetup(payload)
+        .then((setup) => {
+          if (gen !== readGen.current) return;
+          // A link we cannot read is worth saying out loud: silence would look
+          // like an empty Setup, and the recipient would not know to ask for the
+          // text instead.
+          setArrival(setup ? { kind: "shared", payload, setup } : { kind: "broken" });
+        })
+        .catch(() => {
+          // `decodeSetup` is written not to throw, but a link the browser
+          // cannot even hand over is still just an unreadable link.
+          if (gen !== readGen.current) return;
+          setArrival({ kind: "broken" });
+        });
     }
 
     readHash();
@@ -88,12 +111,12 @@ export default function App() {
         mode: input.mode,
         chunks,
         collectionId: input.collectionId,
+        startedAt: Date.now(),
       },
     });
   }
 
   function finish(run: RunState, transcripts: string[]) {
-    const now = Date.now();
     const record: RunRecord = {
       id: newId(),
       collectionId: run.collectionId,
@@ -106,10 +129,12 @@ export default function App() {
         transcript: transcripts[i] ?? "",
         outcome: null,
       })),
-      startedAt: now,
-      finishedAt: now,
+      // Taken from the Run screen rather than from here: stamping both at the
+      // end would record every Run as having taken no time at all.
+      startedAt: run.startedAt,
+      finishedAt: Date.now(),
     };
-    void saveRun(record);
+    void saveRun(record).catch(() => setStorageBroken(true));
     setScreen({ name: "results", run, record });
   }
 
@@ -124,11 +149,17 @@ export default function App() {
       results: screen.record.results.map((r, i) => (i === index ? { ...r, outcome } : r)),
     };
     setScreen({ name: "results", run: screen.run, record });
-    void saveRun(record);
+    void saveRun(record).catch(() => setStorageBroken(true));
   }
 
   return (
     <div className="app">
+      {storageBroken && (
+        <p className="note bad pad">
+          This browser cannot save your work — private browsing or a full store is probably blocking
+          it. The dictation itself still works, it just will not be here next time.
+        </p>
+      )}
       {screen.name === "setup" &&
         (arrival.kind === "waiting" ? (
           <p className="note pad">Opening the shared dictation…</p>
@@ -142,6 +173,7 @@ export default function App() {
             canEnumerate={canEnumerate}
             shared={arrival.kind === "shared" ? arrival.setup : null}
             shareBroken={arrival.kind === "broken"}
+            onStorageFail={() => setStorageBroken(true)}
           />
         ))}
       {screen.name === "run" && (
@@ -155,7 +187,10 @@ export default function App() {
           chunks={screen.record.chunks}
           results={screen.record.results}
           onMark={mark}
-          onAgain={() => setScreen({ name: "run", run: screen.run })}
+          onAgain={() =>
+            // A second pass is a new Run, so it gets a new start time.
+            setScreen({ name: "run", run: { ...screen.run, startedAt: Date.now() } })
+          }
           onSetup={() => setScreen({ name: "setup" })}
         />
       )}

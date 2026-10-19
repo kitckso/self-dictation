@@ -15,6 +15,7 @@ function vocabRun(over: Partial<RunState> = {}): RunState {
     mode: "vocab",
     chunks: ["圖書館", "醫院"],
     collectionId: null,
+    startedAt: 0,
     ...over,
   };
 }

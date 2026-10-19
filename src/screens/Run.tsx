@@ -18,6 +18,11 @@ export interface RunState {
   mode: Mode;
   chunks: string[];
   collectionId: string | null;
+  /**
+   * When this Run began. Stamped when the Run screen opens rather than when it
+   * ends, so the saved record says how long the Passage was actually practised.
+   */
+  startedAt: number;
 }
 
 interface Props {
