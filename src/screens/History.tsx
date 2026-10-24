@@ -184,8 +184,8 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
             <p className="lbl">Past runs</p>
             {summaries.length === 0 ? (
               <p className="note">
-                Nothing yet. A Run is saved here when it ends, so you can see how you are doing and
-                come back to the material that caught you out.
+                Nothing yet. A Run is kept here once you mark something in it, so you can see how
+                you are doing and come back to the material that caught you out.
               </p>
             ) : (
               <div className="saved">

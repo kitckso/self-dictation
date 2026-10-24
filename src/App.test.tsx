@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
 import type { Run } from "./domain/types";
-import { listCollections, listAllRuns, saveRun } from "./storage/db";
+import { listCollections, listAllRuns, saveRun, deleteRun } from "./storage/db";
 import { onVoicesChanged, webSpeech } from "./tts";
 
 vi.mock("./tts", () => ({
@@ -144,6 +144,8 @@ describe("App", () => {
 
       fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
       fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+      // A mark is what saves the Run, so the save happens after it.
+      fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
 
       await waitFor(() => expect(saveRun).toHaveBeenCalled());
       const record = vi.mocked(saveRun).mock.calls[0]![0];
@@ -164,12 +166,14 @@ describe("App", () => {
 
       fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
       fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+      fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
       await screen.findByRole("button", { name: /run it again/i });
 
       const first = vi.mocked(saveRun).mock.calls[0]![0].startedAt;
 
       fireEvent.click(screen.getByRole("button", { name: /run it again/i }));
       fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+      fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
 
       await waitFor(() => expect(saveRun).toHaveBeenCalledTimes(2));
       expect(vi.mocked(saveRun).mock.calls[1]![0].startedAt).toBeGreaterThan(first);
@@ -196,7 +200,73 @@ describe("App", () => {
 
     // Persistence is a convenience, never a precondition: the reveal still happens.
     expect(await screen.findByRole("button", { name: /run it again/i })).toBeTruthy();
-    expect(screen.getByText(/cannot save your work/i)).toBeTruthy();
+
+    // The mark is what saves the Run, and the failure is said out loud.
+    fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
+    expect(await screen.findByText(/cannot save your work/i)).toBeTruthy();
+  });
+
+  it("does not keep a Run that nothing in it was answered", async () => {
+    await arriveFrom(shared);
+    render(<App />);
+    await screen.findByText(/opened from a shared link/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+
+    // The Run is over, but nothing in it was answered, so there is nothing to
+    // keep and nothing to save.
+    expect(await screen.findByRole("button", { name: /run it again/i })).toBeTruthy();
+    expect(saveRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps a Run once something in it is answered", async () => {
+    await arriveFrom(shared);
+    render(<App />);
+    await screen.findByText(/opened from a shared link/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
+
+    await waitFor(() => expect(saveRun).toHaveBeenCalledTimes(1));
+  });
+
+  it("gives a Run up again when the last mark is taken back", async () => {
+    await arriveFrom(shared);
+    render(<App />);
+    await screen.findByText(/opened from a shared link/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
+    await waitFor(() => expect(saveRun).toHaveBeenCalledTimes(1));
+
+    // The same button again takes the mark back, and the Run with it.
+    fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
+
+    await waitFor(() => expect(deleteRun).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(deleteRun).mock.calls[0]![0]).toBe(
+      vi.mocked(saveRun).mock.calls[0]![0].id,
+    );
+  });
+
+  it("keeps a Run where something was typed, because that is an answer too", async () => {
+    render(<App />);
+
+    // English is typed by default, so the answer goes into a box.
+    fireEvent.click(screen.getByRole("button", { name: /English/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Vocabulary" }));
+    fireEvent.change(screen.getByPlaceholderText(/圖書館/), { target: { value: "library" } });
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+
+    fireEvent.change(await screen.findByRole("textbox", { name: /answer for chunk 1/i }), {
+      target: { value: "library" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^end$/i }));
+
+    await waitFor(() => expect(saveRun).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(saveRun).mock.calls[0]![0].results[0]?.transcript).toBe("library");
   });
 
   it("shows a finished Run in Your progress, and offers back what went wrong", async () => {

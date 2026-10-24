@@ -57,6 +57,8 @@ _Avoid_: Invite, permalink, deep link
 **Run**:
 One complete attempt at dictating a Collection's Passage or Vocabulary Items,
 from start to finish. A Run belongs to a person, a Mode, and a point in time.
+A Run is kept only once something in it has been answered — a Transcript or a
+mark. Ending a dictation without answering anything leaves no record behind.
 _Avoid_: Session, attempt, exercise, drill, quiz
 
 **Chunk**:

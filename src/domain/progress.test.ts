@@ -4,6 +4,7 @@ import {
   classify,
   drillText,
   groupByLanguage,
+  hasAnswers,
   itemProgress,
   pickRandom,
   runText,
@@ -63,6 +64,36 @@ describe("classify", () => {
 
   it("prefers a Transcript to a mark left over from paper", () => {
     expect(classify("abcd", "abcd", "wrong")).toBe("right");
+  });
+});
+
+describe("hasAnswers", () => {
+  it("has none for a Run that was never marked", () => {
+    expect(hasAnswers(makeRun())).toBe(false);
+  });
+
+  it("has some once a Paper Answer is marked", () => {
+    const run = makeRun({ results: results({ index: 0, outcome: "wrong" }) });
+
+    expect(hasAnswers(run)).toBe(true);
+  });
+
+  it("has some once something is typed", () => {
+    const run = makeRun({ results: results({ index: 0, transcript: "圖書館" }) });
+
+    expect(hasAnswers(run)).toBe(true);
+  });
+
+  it("has none for whitespace typed and nothing marked", () => {
+    const run = makeRun({ results: results({ index: 0, transcript: "   " }) });
+
+    expect(hasAnswers(run)).toBe(false);
+  });
+
+  it("has none again when the last mark is taken back", () => {
+    const run = makeRun({ results: results({ index: 0, outcome: null }) });
+
+    expect(hasAnswers(run)).toBe(false);
   });
 });
 

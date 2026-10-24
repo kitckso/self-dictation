@@ -83,6 +83,11 @@ export function Results({
         </p>
       </header>
 
+      {marked === 0 && (
+        // Nothing was answered, so there is no record of this Run to keep.
+        <p className="note">Nothing marked, so this run is not kept. Mark an answer to keep it.</p>
+      )}
+
       <div>
         {chunks.map((chunk, i) => {
           const g = graded[i] ?? { typed: false, score: null, parts: null };

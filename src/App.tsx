@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toChunks } from "./domain/chunking";
+import { hasAnswers } from "./domain/progress";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
 import type { Outcome, Run as RunRecord, SetupFill, StartInput } from "./domain/types";
-import { saveRun } from "./storage/db";
+import { deleteRun, saveRun } from "./storage/db";
 import { newId } from "./lib/id";
 import { isSupported, onVoicesChanged, webSpeech } from "./tts";
 import type { VoiceOption } from "./tts";
@@ -173,22 +174,36 @@ export default function App() {
       startedAt: run.startedAt,
       finishedAt: Date.now(),
     };
-    void saveRun(record).catch(() => setStorageBroken(true));
+    // A Run that was never answered is not kept. Ending a dictation without
+    // marking any of it says the record is not wanted, so the Run is saved
+    // only once something in it has been answered.
+    if (hasAnswers(record)) {
+      void saveRun(record).catch(() => setStorageBroken(true));
+    }
     setScreen({ name: "results", run, record });
   }
 
   /**
    * Self-marking happens after the Run, on the Results screen, so the saved
    * record is rewritten as marks are made rather than queued for the end.
+   *
+   * The first mark is also what saves a Run that was never answered. Taking
+   * the last mark back gives the Run up again.
    */
   function mark(index: number, outcome: Outcome | null) {
     if (screen.name !== "results") return;
+    const previous = screen.record;
     const record: RunRecord = {
-      ...screen.record,
-      results: screen.record.results.map((r, i) => (i === index ? { ...r, outcome } : r)),
+      ...previous,
+      results: previous.results.map((r, i) => (i === index ? { ...r, outcome } : r)),
     };
     setScreen({ name: "results", run: screen.run, record });
-    void saveRun(record).catch(() => setStorageBroken(true));
+    if (hasAnswers(record)) {
+      void saveRun(record).catch(() => setStorageBroken(true));
+    } else if (hasAnswers(previous)) {
+      // The last mark was taken back, so the Run is not wanted after all.
+      void deleteRun(record.id).catch(() => setStorageBroken(true));
+    }
   }
 
   return (

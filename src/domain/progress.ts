@@ -86,6 +86,18 @@ export function classify(reference: string, transcript: string, outcome: Outcome
 }
 
 /**
+ * Whether a Run has anything in it that was answered.
+ *
+ * A Chunk is answered when something was typed for it or it was marked on
+ * paper. A Run where nothing was answered says nothing about how the person
+ * did, so it is not kept: ending a dictation without marking any of it is a
+ * decision to leave no record behind.
+ */
+export function hasAnswers(run: Run): boolean {
+  return run.results.some((r) => r.transcript.trim() !== "" || r.outcome !== null);
+}
+
+/**
  * What every piece of material that has been practised has amounted to.
  *
  * The Runs are read oldest first, so the most recent answer is the one left at

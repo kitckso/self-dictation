@@ -113,6 +113,18 @@ describe("Results", () => {
     expect(screen.queryByRole("button", { name: /✓ all/ })).toBeNull();
   });
 
+  it("says so when nothing in the Run was answered, because it is not kept", () => {
+    render(<Harness initial={paper} />);
+
+    // A Run nobody answered is not a record of anything, so it is not kept.
+    expect(screen.getByText(/not kept/i)).toBeTruthy();
+
+    fireEvent.click(markButtons()[0]!);
+
+    // Once something is answered the Run is worth keeping, and the note goes.
+    expect(screen.queryByText(/not kept/i)).toBeNull();
+  });
+
   it("marks a score right at the same point a Weakness is counted as wrong", () => {
     // Exactly at the threshold is still right. Results and Progress take the
     // figure from one place, but a second copy of it is exactly how they
