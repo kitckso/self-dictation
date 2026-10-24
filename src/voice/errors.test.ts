@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeCommandError, UnavailableCommandError } from "./errors";
+import { describeCommandError, HeadMismatchError, UnavailableCommandError } from "./errors";
 
 describe("describeCommandError", () => {
   it("says when the microphone is blocked rather than merely unavailable", () => {
@@ -18,11 +18,18 @@ describe("describeCommandError", () => {
 
   it("does not offer a retry for a browser with no microphone API", () => {
     expect(
-      describeCommandError(
-        new UnavailableCommandError("this browser cannot use a microphone"),
-      ),
+      describeCommandError(new UnavailableCommandError("this browser cannot use a microphone")),
     ).toEqual({
       message: "this browser cannot use a microphone",
+      retryable: false,
+    });
+  });
+
+  it("does not offer a retry for commands that have to be trained again", () => {
+    // Only training again can put this right, so a "Try again" button would
+    // be a promise the app cannot keep.
+    expect(describeCommandError(new HeadMismatchError())).toEqual({
+      message: expect.stringMatching(/need to be retrained/i),
       retryable: false,
     });
   });

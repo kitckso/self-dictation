@@ -4,17 +4,31 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
 import type { Run } from "./domain/types";
-import { listCollections, listAllRuns, saveRun, deleteRun } from "./storage/db";
+import { listCollections, listAllRuns, saveRun, deleteRun, getVoiceProfile } from "./storage/db";
 import { onVoicesChanged, webSpeech } from "./tts";
+import type { VoiceProfile } from "./voice/profile";
 
 vi.mock("./tts", () => ({
   isSupported: () => true,
+  isAndroidLike: () => false,
   onVoicesChanged: vi.fn(() => () => {}),
   webSpeech: {
     listVoices: vi.fn().mockResolvedValue([]),
     canEnumerateVoices: vi.fn().mockResolvedValue(false),
     speak: vi.fn().mockResolvedValue(undefined),
     cancel: vi.fn(),
+  },
+}));
+
+/**
+ * The voice listener is a stand-in: the real one opens a microphone and loads
+ * a model, which is nothing to do with what the app does with a Run.
+ */
+vi.mock("./voice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./voice")>()),
+  voiceCommands: {
+    start: vi.fn(() => Promise.resolve()),
+    stop: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -43,6 +57,11 @@ vi.mock("./storage/db", () => ({
   listAllRuns: vi.fn(async () => store.runs),
   deleteRun: vi.fn().mockResolvedValue(undefined),
   clearRuns: vi.fn().mockResolvedValue(undefined),
+  getVoiceProfile: vi.fn().mockResolvedValue(null),
+  getVoiceHead: vi.fn().mockResolvedValue(null),
+  saveVoiceProfile: vi.fn().mockResolvedValue(undefined),
+  renameVoiceProfile: vi.fn().mockResolvedValue(undefined),
+  deleteVoiceProfile: vi.fn().mockResolvedValue(undefined),
 }));
 
 const shared: SharedSetup = {
@@ -68,12 +87,34 @@ afterEach(() => {
   vi.mocked(saveRun).mockImplementation(saveRunImpl);
   vi.mocked(listAllRuns).mockImplementation(async () => store.runs);
   vi.mocked(listCollections).mockResolvedValue([]);
+  vi.mocked(getVoiceProfile).mockResolvedValue(null);
 });
 
 // jsdom has no layout, so element scrolling is a no-op rather than an error.
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  // A Run only offers voice commands when the browser could use a microphone,
+  // and jsdom has none.
+  Object.defineProperty(navigator, "mediaDevices", {
+    configurable: true,
+    value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [] }) },
+  });
+  Object.defineProperty(window, "AudioContext", { configurable: true, value: class {} });
 });
+
+/** A profile of the person's own commands. */
+function voiceProfile(over: Partial<VoiceProfile> = {}): VoiceProfile {
+  return {
+    id: "p1",
+    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
+    counts: { next: 6, repeat: 6, stop: 6 },
+    enabled: true,
+    createdAt: 1_000,
+    updatedAt: 2_000,
+    trainedAt: 2_000,
+    ...over,
+  };
+}
 
 describe("App", () => {
   it("opens a dictation that arrived in a link", async () => {
@@ -246,9 +287,7 @@ describe("App", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
 
     await waitFor(() => expect(deleteRun).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(deleteRun).mock.calls[0]![0]).toBe(
-      vi.mocked(saveRun).mock.calls[0]![0].id,
-    );
+    expect(vi.mocked(deleteRun).mock.calls[0]![0]).toBe(vi.mocked(saveRun).mock.calls[0]![0].id);
   });
 
   it("keeps a Run where something was typed, because that is an answer too", async () => {
@@ -326,5 +365,38 @@ describe("App", () => {
     const box = await screen.findByPlaceholderText(/圖書館/);
     expect((box as HTMLTextAreaElement).value).toBe("圖書館");
     expect(screen.getByDisplayValue(/Needs practice/)).toBeTruthy();
+  });
+});
+
+describe("voice commands", () => {
+  /** Get to a Run with one Vocabulary Item. */
+  async function startRun() {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Vocabulary" }));
+    fireEvent.change(screen.getByPlaceholderText(/圖書館/), { target: { value: "圖書館" } });
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+  }
+
+  it("names the built-in English words when there is no profile", async () => {
+    await startRun();
+
+    expect(await screen.findByText(/say .go. or .yes. to play the next chunk/i)).toBeTruthy();
+  });
+
+  it("names the person's own commands when they have trained some", async () => {
+    vi.mocked(getVoiceProfile).mockResolvedValue(voiceProfile());
+
+    await startRun();
+
+    expect(await screen.findByText(/say .下一個. to play the next chunk/i)).toBeTruthy();
+    expect(screen.queryByText(/say .go. or .yes./i)).toBeNull();
+  });
+
+  it("falls back to the built-in words when the profile is switched off", async () => {
+    vi.mocked(getVoiceProfile).mockResolvedValue(voiceProfile({ enabled: false }));
+
+    await startRun();
+
+    expect(await screen.findByText(/say .go. or .yes. to play the next chunk/i)).toBeTruthy();
   });
 });

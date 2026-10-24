@@ -10,6 +10,28 @@ export class UnavailableCommandError extends Error {
   name = "UnavailableCommandError";
 }
 
+/**
+ * A trained head that cannot be used with the model this app now has.
+ *
+ * The message says what to do about it, because there is no way round it: a
+ * head trained against a different base model has no meaning here, and
+ * quietly falling back to the built-in English words would look like the
+ * person's own commands had stopped working.
+ *
+ * It lives here rather than beside the head because the app has to be able to
+ * raise it without pulling in TensorFlow.js.
+ */
+export class HeadMismatchError extends Error {
+  // A name rather than `instanceof`, so this survives the lazy chunk getting
+  // its own copy of this module.
+  name = "HeadMismatchError";
+  constructor(
+    message = "your custom commands need to be retrained — train them again in Voice commands",
+  ) {
+    super(message);
+  }
+}
+
 /** What to show, and whether "Try again" can possibly help. */
 export type CommandFailure = {
   message: string;
@@ -30,6 +52,16 @@ export function describeCommandError(error: unknown): CommandFailure {
       error instanceof Error && error.message.trim()
         ? error.message
         : "voice commands cannot start here";
+    return { message, retryable: false };
+  }
+  if (name === "HeadMismatchError") {
+    // Only training again can put this right, so there is nothing to offer
+    // but the way to do it: a "Try again" button here would be a promise the
+    // app cannot keep.
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : "your custom commands need to be retrained";
     return { message, retryable: false };
   }
 

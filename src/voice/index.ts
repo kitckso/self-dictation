@@ -1,10 +1,9 @@
 import type { CommandListener } from "./CommandListener";
 import { UnavailableCommandError } from "./errors";
+import type { VoiceTrainer } from "./VoiceTrainer";
 
-export { commandFor, COMMAND_CONFIDENCE } from "./commands";
-export type { DictationCommand } from "./commands";
-export type { CommandListener } from "./CommandListener";
-export { canTryVoiceCommands, microphoneAvailable } from "./microphone";
+export { canTryVoiceCommands } from "./microphone";
+export { commandPhrasesOf } from "./profile";
 
 /**
  * A listener that is only fetched when the microphone is actually used.
@@ -48,3 +47,14 @@ export const voiceCommands: CommandListener = {
     return listener?.stop() ?? Promise.resolve();
   },
 };
+
+/**
+ * The trainer for a person's own commands, loaded only when it is wanted.
+ *
+ * It drags in the transfer-learning half of the speech-commands library,
+ * which is a lot of JavaScript for a dialog that may never be opened.
+ */
+export async function voiceTrainer(): Promise<VoiceTrainer> {
+  const { VoiceTrainer: Trainer } = await import("./VoiceTrainer");
+  return new Trainer();
+}

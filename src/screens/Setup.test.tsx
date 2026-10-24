@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { webSpeech } from "../tts";
+import type { VoiceProfile } from "../voice/profile";
 import { Setup } from "./Setup";
 
 vi.mock("../tts", () => ({
@@ -19,11 +20,60 @@ vi.mock("../storage/db", () => ({
   deleteCollection: vi.fn().mockResolvedValue(undefined),
 }));
 
+/**
+ * The seam behind the voice-commands dialog.
+ *
+ * It is made by the app and handed over, so the test hands over a stand-in
+ * rather than loading the real thing.
+ */
+const { voiceTrainer } = vi.hoisted(() => {
+  // The same state every time: a snapshot that changes on every read would
+  // send the store into a loop.
+  const state = {
+    profile: null,
+    phrases: { next: "next", repeat: "repeat", stop: "stop" },
+    counts: { next: 0, repeat: 0, stop: 0 },
+    noise: 0,
+    enabled: false,
+    stage: "names",
+    busy: false,
+    progress: null,
+    test: null,
+    heard: null,
+    error: null,
+    unsaved: false,
+    phraseError: null,
+  };
+  const trainer = {
+    subscribe: vi.fn(() => () => {}),
+    getState: vi.fn(() => state),
+    load: vi.fn(),
+    discard: vi.fn(),
+  };
+  return { trainer, voiceTrainer: vi.fn(async () => trainer) };
+});
+
+vi.mock("../voice", () => ({ voiceTrainer }));
+
 beforeEach(() => {
   vi.mocked(webSpeech.speak).mockResolvedValue("finished");
 });
 
 afterEach(cleanup);
+
+/** A profile of the person's own commands. */
+function voiceProfile(over: Partial<VoiceProfile> = {}): VoiceProfile {
+  return {
+    id: "p1",
+    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
+    counts: { next: 6, repeat: 6, stop: 6 },
+    enabled: true,
+    createdAt: 1_000,
+    updatedAt: 2_000,
+    trainedAt: 2_000,
+    ...over,
+  };
+}
 
 function renderSetup(props: Partial<Parameters<typeof Setup>[0]> = {}) {
   return render(
@@ -36,6 +86,8 @@ function renderSetup(props: Partial<Parameters<typeof Setup>[0]> = {}) {
       fromLink={false}
       shareBroken={false}
       onStorageFail={() => {}}
+      onVoiceCommandsChanged={() => {}}
+      voiceProfile={null}
       {...props}
     />,
   );
@@ -163,5 +215,43 @@ describe("Setup", () => {
 
     expect(screen.getByText(/finished playing/i)).toBeTruthy();
     expect(screen.queryByText(/stopped before it had finished/i)).toBeNull();
+  });
+});
+
+describe("the voice commands card", () => {
+  it("says the built-in words when nothing has been trained", () => {
+    renderSetup();
+
+    expect(screen.getByText(/the built-in english words/i)).toBeTruthy();
+    expect(screen.getByText(/hears .go., .yes., .no. and .stop. out loud/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /teach it your own words/i })).toBeTruthy();
+  });
+
+  it("names the person's own words when they have trained some", () => {
+    renderSetup({ voiceProfile: voiceProfile() });
+
+    expect(screen.getByText(/下一個/)).toBeTruthy();
+    expect(screen.getByText(/trained on 18 samples/i)).toBeTruthy();
+    expect(screen.getByText("Your words")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /change the words/i })).toBeTruthy();
+  });
+
+  it("says so when the person's own words are switched off", () => {
+    renderSetup({ voiceProfile: voiceProfile({ enabled: false }) });
+
+    expect(screen.getByText("Switched off")).toBeTruthy();
+    expect(screen.getByText(/still hears .go., .yes., .no. and .stop./i)).toBeTruthy();
+  });
+
+  it("opens the dialog when the card is tapped", async () => {
+    renderSetup();
+
+    fireEvent.click(screen.getByRole("button", { name: /teach it your own words/i }));
+
+    expect(voiceTrainer).toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("dialog", { name: /voice commands/i })).toBeTruthy();
   });
 });

@@ -3,11 +3,12 @@ import { toChunks } from "./domain/chunking";
 import { hasAnswers } from "./domain/progress";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
 import type { Outcome, Run as RunRecord, SetupFill, StartInput } from "./domain/types";
-import { deleteRun, saveRun } from "./storage/db";
+import { deleteRun, getVoiceProfile, saveRun } from "./storage/db";
 import { newId } from "./lib/id";
 import { isSupported, onVoicesChanged, webSpeech } from "./tts";
 import type { VoiceOption } from "./tts";
-import { canTryVoiceCommands, voiceCommands } from "./voice";
+import { canTryVoiceCommands, commandPhrasesOf, voiceCommands } from "./voice";
+import type { VoiceProfile } from "./voice/profile";
 import { Setup } from "./screens/Setup";
 import { Results } from "./screens/Results";
 import { History } from "./screens/History";
@@ -61,12 +62,36 @@ export default function App() {
    * starts again from it rather than keeping the old answers.
    */
   const [setupGen, setSetupGen] = useState(0);
+  /**
+   * What the person calls the voice commands, if they have trained their own.
+   *
+   * Only the summary is read — the trained head is fetched when the
+   * microphone is actually used — so opening the app does not pull in the
+   * model.
+   */
+  const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null);
+  const commandPhrases = commandPhrasesOf(voiceProfile);
 
   /**
    * The same function every time, so the screens that read the store on
    * mount do not read it again on every render.
    */
   const storageFail = useCallback(() => setStorageBroken(true), []);
+
+  /**
+   * Read what the voice commands are called, so a Run can say so.
+   *
+   * A store that cannot be read is not worth shouting about here: the app
+   * already says so when it cannot save anything, and the built-in English
+   * words are a perfectly good fallback for this one hint.
+   */
+  const readVoiceProfile = useCallback(() => {
+    void getVoiceProfile()
+      .then(setVoiceProfile)
+      .catch(() => setVoiceProfile(null));
+  }, []);
+
+  useEffect(readVoiceProfile, [readVoiceProfile]);
 
   useEffect(() => {
     if (!isSupported()) {
@@ -231,6 +256,8 @@ export default function App() {
             fromLink={arrival.kind === "shared"}
             shareBroken={arrival.kind === "broken"}
             onStorageFail={storageFail}
+            onVoiceCommandsChanged={readVoiceProfile}
+            voiceProfile={voiceProfile}
           />
         ))}
       {screen.name === "history" && (
@@ -245,6 +272,7 @@ export default function App() {
           run={screen.run}
           onFinish={(transcripts) => finish(screen.run, transcripts)}
           commands={canTryVoiceCommands() ? voiceCommands : undefined}
+          commandPhrases={commandPhrases ?? undefined}
           autoStart
         />
       )}

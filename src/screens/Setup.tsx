@@ -14,7 +14,11 @@ import type { VoiceOption } from "../tts";
 import { deleteCollection, listCollections, saveCollection } from "../storage/db";
 import { newId } from "../lib/id";
 import type { Collection } from "../domain/types";
+import { voiceTrainer } from "../voice";
+import { totalSamples, type VoiceProfile } from "../voice/profile";
+import type { VoiceTrainer } from "../voice/VoiceTrainer";
 import { Share } from "./Share";
+import { VoiceCommands } from "./VoiceCommands";
 
 interface Props {
   onStart: (input: StartInput) => void;
@@ -31,6 +35,10 @@ interface Props {
   shareBroken: boolean;
   /** A read or write failed, so the browser cannot keep anything. */
   onStorageFail: () => void;
+  /** The voice commands changed, so the Run hint has to be told. */
+  onVoiceCommandsChanged: () => void;
+  /** The saved voice commands, if there are any. */
+  voiceProfile: VoiceProfile | null;
 }
 
 const SAMPLES: Record<Mode, Record<LanguageId, string>> = {
@@ -70,6 +78,8 @@ export function Setup({
   fromLink,
   shareBroken,
   onStorageFail,
+  onVoiceCommandsChanged,
+  voiceProfile,
 }: Props) {
   const [language, setLanguage] = useState<LanguageId>(initial?.language ?? "yue");
   const [mode, setMode] = useState<Mode>(initial?.mode ?? "paragraph");
@@ -78,6 +88,15 @@ export function Setup({
   const [collections, setCollections] = useState<Collection[]>([]);
   const [testState, setTestState] = useState<"idle" | "speaking" | "ok" | "cut" | "failed">("idle");
   const [sharing, setSharing] = useState(false);
+  /** Whether the dialog for teaching the app the person's own commands is open. */
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  /**
+   * The seam behind that dialog, once it has been fetched.
+   *
+   * It is only made when the dialog is wanted: it is the code that loads the
+   * speech model, and most people never teach the app their own words.
+   */
+  const [trainer, setTrainer] = useState<VoiceTrainer | null>(null);
   /**
    * Which voice test is current.
    *
@@ -92,6 +111,22 @@ export function Setup({
     // list that looks like "you have not saved anything yet".
     void listCollections().then(setCollections).catch(onStorageFail);
   }, [onStorageFail]);
+
+  /**
+   * Open the dialog, fetching what is behind it.
+   *
+   * The seam is made here rather than in the dialog so that the code behind
+   * it stays out of the app until somebody asks for it.
+   */
+  async function openVoice() {
+    setVoiceOpen(true);
+    try {
+      setTrainer(await voiceTrainer());
+    } catch (error) {
+      console.error("Voice commands could not be opened", error);
+      setVoiceOpen(false);
+    }
+  }
 
   function testVoice() {
     if (testState === "speaking") return;
@@ -130,6 +165,32 @@ export function Setup({
     () => findCollectionByTitle(collections, draftTitle(title, mode)),
     [collections, title, mode],
   );
+
+  /**
+   * What the voice-command card says.
+   *
+   * It has to be honest about all three states: nobody has trained anything,
+   * there are commands and they are in use, and there are commands but they
+   * are switched off. The last one is the one that would otherwise look like
+   * the feature had quietly stopped working.
+   */
+  const trainedSamples = voiceProfile
+    ? totalSamples(voiceProfile.counts, voiceProfile.noise ?? 0)
+    : 0;
+  const voiceTitle = voiceProfile
+    ? `“${voiceProfile.phrases.next}”, “${voiceProfile.phrases.repeat}” and “${voiceProfile.phrases.stop}”`
+    : "The built-in English words";
+  const voiceChip = !voiceProfile
+    ? "English"
+    : voiceProfile.enabled
+      ? "Your words"
+      : "Switched off";
+  const voiceChipClass = !voiceProfile ? "chip" : voiceProfile.enabled ? "chip on" : "chip off";
+  const voiceDetail = !voiceProfile
+    ? "A Run hears “go”, “yes”, “no” and “stop” out loud. Teach it your own words in any language — it learns them on this device, and the audio is never kept."
+    : voiceProfile.enabled
+      ? `Trained on ${trainedSamples} samples. A Run hears these instead of “go”, “yes”, “no” and “stop”.`
+      : `Trained on ${trainedSamples} samples, but switched off — a Run still hears “go”, “yes”, “no” and “stop”.`;
 
   async function save() {
     if (!canStart) return;
@@ -326,7 +387,31 @@ export function Setup({
         </section>
       )}
 
+      <section>
+        <p className="lbl">Voice commands</p>
+        <div className="voice-card">
+          <div className="voice-card-head">
+            <span className="nm">{voiceTitle}</span>
+            <span className={voiceChipClass}>{voiceChip}</span>
+          </div>
+          <p className="note">{voiceDetail}</p>
+          <div className="voice-card-actions">
+            <button className="rowbtn" onClick={() => void openVoice()}>
+              {voiceProfile ? "Change the words" : "Teach it your own words"}
+            </button>
+          </div>
+        </div>
+      </section>
+
       {canStart && sharing && <Share setup={shareable} onClose={() => setSharing(false)} />}
+
+      {voiceOpen && trainer && (
+        <VoiceCommands
+          trainer={trainer}
+          onClose={() => setVoiceOpen(false)}
+          onChanged={onVoiceCommandsChanged}
+        />
+      )}
 
       {/*
         The actions are pinned to the bottom of the window. Loading a sample or

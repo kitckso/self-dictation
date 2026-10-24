@@ -1,4 +1,6 @@
 import type { Collection, Run } from "../domain/types";
+import type { VoiceHead } from "../voice/head";
+import type { VoicePhrases, VoiceProfile } from "../voice/profile";
 
 /**
  * Everything lives in the browser. There is no server and no account, so
@@ -6,9 +8,13 @@ import type { Collection, Run } from "../domain/types";
  */
 
 const DB_NAME = "self-dictation";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const COLLECTIONS = "collections";
 const RUNS = "runs";
+/** What a person's own commands are called, and whether they are in use. */
+const VOICE_PROFILES = "voiceProfiles";
+/** The trained head behind those names. */
+const VOICE_HEADS = "voiceHeads";
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -25,6 +31,12 @@ function open(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(RUNS)) {
         const store = db.createObjectStore(RUNS, { keyPath: "id" });
         store.createIndex("startedAt", "startedAt");
+      }
+      if (!db.objectStoreNames.contains(VOICE_PROFILES)) {
+        db.createObjectStore(VOICE_PROFILES, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(VOICE_HEADS)) {
+        db.createObjectStore(VOICE_HEADS, { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -102,5 +114,98 @@ export async function clearRuns(): Promise<void> {
     };
     t.oncomplete = () => resolve();
     t.onerror = () => reject(t.error);
+  });
+}
+
+/** Every set of custom voice commands in this browser, newest first. */
+async function listVoiceProfiles(): Promise<VoiceProfile[]> {
+  const all = await tx<VoiceProfile[]>(VOICE_PROFILES, "readonly", (s) => s.getAll());
+  return all.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/**
+ * The one set of custom voice commands, if there is one.
+ *
+ * There is one profile for every language: a person who dictates Cantonese
+ * and English does not want two sets of words to remember.
+ */
+export async function getVoiceProfile(): Promise<VoiceProfile | null> {
+  const all = await listVoiceProfiles();
+  return all[0] ?? null;
+}
+
+/**
+ * Change the names of a profile, and nothing else.
+ *
+ * The names are labels: the head behind them is the head that keeps being
+ * used, so a rename does not need the head and does not touch it. Only the
+ * profile is written, and it is read and written in one transaction, so that
+ * a rename cannot half-happen.
+ */
+export async function renameVoiceProfile(
+  id: string,
+  phrases: VoicePhrases,
+  updatedAt: number,
+): Promise<VoiceProfile> {
+  const db = await open();
+  return new Promise<VoiceProfile>((resolve, reject) => {
+    const t = db.transaction(VOICE_PROFILES, "readwrite");
+    const store = t.objectStore(VOICE_PROFILES);
+    let renamed: VoiceProfile | null = null;
+    t.oncomplete = () => {
+      if (renamed) resolve(renamed);
+      else reject(new Error("the voice commands could not be renamed"));
+    };
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error ?? new Error("the voice commands could not be renamed"));
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const profile = req.result as VoiceProfile | undefined;
+      if (!profile) {
+        reject(new Error("there are no voice commands to rename"));
+        return;
+      }
+      renamed = { ...profile, phrases, updatedAt };
+      store.put(renamed);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** The trained head behind a profile, if it is still here. */
+export async function getVoiceHead(id: string): Promise<VoiceHead | null> {
+  const head = await tx<VoiceHead | undefined>(VOICE_HEADS, "readonly", (s) => s.get(id));
+  return head ?? null;
+}
+
+/**
+ * Keep a profile and its head together.
+ *
+ * They are written in one transaction, so a store that runs out of room
+ * halfway through cannot leave a profile behind that has no head: the pair
+ * is either both there or neither is.
+ */
+export async function saveVoiceProfile(profile: VoiceProfile, head: VoiceHead): Promise<void> {
+  const db = await open();
+  await new Promise<void>((resolve, reject) => {
+    const t = db.transaction([VOICE_PROFILES, VOICE_HEADS], "readwrite");
+    t.objectStore(VOICE_PROFILES).put(profile);
+    t.objectStore(VOICE_HEADS).put(head);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error ?? new Error("the voice commands could not be saved"));
+  });
+}
+
+/** Forget a profile and its head together, for the same reason. */
+export async function deleteVoiceProfile(id: string): Promise<void> {
+  const db = await open();
+  await new Promise<void>((resolve, reject) => {
+    const t = db.transaction([VOICE_PROFILES, VOICE_HEADS], "readwrite");
+    t.objectStore(VOICE_PROFILES).delete(id);
+    t.objectStore(VOICE_HEADS).delete(id);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error ?? new Error("the voice commands could not be removed"));
   });
 }

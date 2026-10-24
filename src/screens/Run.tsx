@@ -13,6 +13,7 @@ import { languageById, type LanguageId, type Mode } from "../domain/types";
 import { isAndroidLike, webSpeech } from "../tts";
 import type { CommandListener } from "../voice/CommandListener";
 import { describeCommandError, type CommandFailure } from "../voice/errors";
+import type { VoicePhrases } from "../voice/profile";
 
 export interface RunState {
   title: string;
@@ -36,6 +37,13 @@ interface Props {
    * also what keeps the microphone out of tests that are about speech alone.
    */
   commands?: CommandListener;
+  /**
+   * What the person calls the commands, when they have trained their own.
+   *
+   * These are labels: the model still answers to the built-in English words
+   * unless a trained head is in use. The hint tells the truth either way.
+   */
+  commandPhrases?: VoicePhrases;
   /** Play the first Chunk once as soon as the Run opens. */
   autoStart?: boolean;
 }
@@ -88,7 +96,7 @@ function failureReason(result: "cut-off" | "failed"): string {
  * Nothing about the material appears here — no Reference, no score. Listen,
  * write it down, and the whole Passage is revealed at once on Results.
  */
-export function Run({ run, onFinish, commands, autoStart = false }: Props) {
+export function Run({ run, onFinish, commands, commandPhrases, autoStart = false }: Props) {
   const [transcripts, setTranscripts] = useState<Record<number, string>>({});
   const [cursor, setCursor] = useState(0);
   const [speaking, setSpeaking] = useState<number | null>(null);
@@ -104,6 +112,15 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
   const [commandRetry, setCommandRetry] = useState(0);
   /** True until the model and microphone have actually started listening. */
   const [commandStarting, setCommandStarting] = useState(Boolean(commands));
+  /**
+   * Bumped every time the device starts or stops talking.
+   *
+   * The listening effect waits on this rather than on `speaking`, because a
+   * play that begins and ends inside one React batch never changes `speaking`
+   * as far as the effect can see — and the microphone would then never be
+   * opened at all.
+   */
+  const [speechTurn, setSpeechTurn] = useState(0);
   /** A first "stop" is waiting for a second one to confirm ending the Run. */
   const [endArmed, setEndArmed] = useState(false);
   const [auto, setAuto] = useState(false);
@@ -125,6 +142,17 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
    * what the glyph means — including which Chunk it would speak.
    */
   const playLabel = playing ? "Stop" : `Speak chunk ${cursor + 1}`;
+
+  /**
+   * The words the hint names.
+   *
+   * A person who has trained their own commands hears their own words here;
+   * everyone else hears the built-in English ones. The built-in model accepts
+   * "go" or "yes" for the next chunk, so both are offered.
+   */
+  const nextWord = commandPhrases ? `“${commandPhrases.next}”` : "“go” or “yes”";
+  const repeatWord = commandPhrases ? `“${commandPhrases.repeat}”` : "“no”";
+  const stopWord = commandPhrases ? `“${commandPhrases.stop}”` : "“stop”";
 
   /**
    * Whoever bumps this owns the speaker. A tap, a stop, or the effect being
@@ -253,7 +281,7 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
       if (timer !== undefined) clearTimeout(timer);
       void commands.stop();
     };
-  }, [commands, speaking, commandRetry]);
+  }, [commands, speechTurn, commandRetry]);
 
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-slot="${cursor}"]`);
@@ -320,6 +348,7 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
   function beginSpeech(index: number) {
     speakingRef.current = index;
     setSpeaking(index);
+    setSpeechTurn((turn) => turn + 1);
     setSpeechError(null);
   }
 
@@ -327,6 +356,7 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
   function endSpeech() {
     speakingRef.current = null;
     setSpeaking(null);
+    setSpeechTurn((turn) => turn + 1);
   }
 
   /**
@@ -524,13 +554,13 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
                 )}
               </>
             ) : endArmed ? (
-              "Say “stop” again after a second to end the Run."
+              `Say ${stopWord} again after a second to end the Run.`
             ) : speaking !== null ? (
               "Voice commands are paused while the Voice speaks."
             ) : commandStarting ? (
               "Starting voice commands…"
             ) : (
-              "Voice commands: say “go” or “yes” to play the next chunk, “no” to hear this one again; “stop” to stop, then again to end."
+              `Voice commands: say ${nextWord} to play the next chunk, ${repeatWord} to hear this one again; ${stopWord} to stop, then again to end.`
             )}
           </p>
         )}

@@ -1,11 +1,13 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Run } from "../domain/types";
+import type { VoiceHead } from "../voice/head";
+import type { VoiceProfile } from "../voice/profile";
 
 /**
  * A small in-memory IndexedDB.
  *
- * Only what the app uses: two object stores, getAll, put, delete and
+ * Only what the app uses: object stores, getAll, get, put, delete and
  * getAllKeys. Enough to check that the store reads and writes what it says
  * it does, and — the reason it exists — that a failure to open it is not
  * remembered for the life of the page.
@@ -21,19 +23,22 @@ class FakeRequest<T> {
 
 class FakeStore {
   private rows: Map<string, unknown>;
-  private onSettled: () => void;
+  private tx: FakeTransaction;
+  private name: string;
 
-  constructor(rows: Map<string, unknown>, onSettled: () => void) {
+  constructor(rows: Map<string, unknown>, tx: FakeTransaction, name: string) {
     this.rows = rows;
-    this.onSettled = onSettled;
+    this.tx = tx;
+    this.name = name;
   }
 
   /** Answer on a later turn of the loop, the way the real thing does. */
   private answer<T>(req: FakeRequest<T>, value: T): FakeRequest<T> {
+    this.tx.begin();
     queueMicrotask(() => {
       req.result = value;
       req.onsuccess?.();
-      this.onSettled();
+      this.tx.settle();
     });
     return req;
   }
@@ -46,24 +51,37 @@ class FakeStore {
     return this.answer(new FakeRequest(), [...this.rows.keys()]);
   }
 
+  get(key: string): FakeRequest<unknown> {
+    return this.answer(new FakeRequest(), this.rows.get(key));
+  }
+
   put(value: { id: string }): FakeRequest<unknown> {
     const req = new FakeRequest<unknown>();
+    this.tx.begin();
     queueMicrotask(() => {
+      if (this.tx.failsWrite(this.name)) {
+        const error = new Error("the store is full");
+        req.error = error;
+        this.tx.fail(error);
+        req.onerror?.();
+        return;
+      }
       this.rows.set(value.id, value);
       req.result = value;
       req.onsuccess?.();
-      this.onSettled();
+      this.tx.settle();
     });
     return req;
   }
 
   delete(key: string): FakeRequest<unknown> {
     const req = new FakeRequest<unknown>();
+    this.tx.begin();
     queueMicrotask(() => {
       this.rows.delete(key);
       req.result = undefined;
       req.onsuccess?.();
-      this.onSettled();
+      this.tx.settle();
     });
     return req;
   }
@@ -72,29 +90,66 @@ class FakeStore {
 class FakeTransaction {
   oncomplete: (() => void) | null = null;
   onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
   error: unknown = null;
+  private pending = 0;
   private settled = false;
   private db: FakeDatabase;
-  private name: string;
+  private names: string[];
+  /** What each store held when the transaction began, to undo it. */
+  private snapshot: Map<string, Map<string, unknown>>;
 
-  constructor(db: FakeDatabase, name: string) {
+  constructor(db: FakeDatabase, names: string[]) {
     this.db = db;
-    this.name = name;
+    this.names = names;
+    this.snapshot = new Map(names.map((name) => [name, new Map(db.rows(name))]));
   }
 
-  objectStore(): FakeStore {
-    return new FakeStore(this.db.rows(this.name), () => this.settle());
+  objectStore(name?: string): FakeStore {
+    const store = name ?? this.names[0];
+    if (!store) throw new Error("no store named");
+    return new FakeStore(this.db.rows(store), this, store);
   }
 
-  private settle(): void {
-    if (this.settled) return;
+  /** Whether a write to this store should be refused. */
+  failsWrite(name: string): boolean {
+    return this.db.failWritesIn.has(name);
+  }
+
+  begin(): void {
+    this.pending++;
+  }
+
+  settle(): void {
+    this.pending--;
+    if (this.pending > 0 || this.settled) return;
     this.settled = true;
     queueMicrotask(() => this.oncomplete?.());
+  }
+
+  /** Undo everything this transaction did, the way a real one rolls back. */
+  abort(): void {
+    if (this.settled) return;
+    this.settled = true;
+    for (const [name, rows] of this.snapshot) {
+      const live = this.db.rows(name);
+      live.clear();
+      for (const [key, value] of rows) live.set(key, value);
+    }
+    queueMicrotask(() => this.onabort?.());
+  }
+
+  /** A write was refused, so the whole transaction is undone. */
+  fail(error: unknown): void {
+    this.error = error;
+    this.abort();
   }
 }
 
 class FakeDatabase {
   stores = new Map<string, Map<string, unknown>>();
+  /** Store names whose writes should fail. */
+  failWritesIn = new Set<string>();
 
   objectStoreNames = {
     contains: (name: string) => this.stores.has(name),
@@ -114,14 +169,17 @@ class FakeDatabase {
     return rows;
   }
 
-  transaction(name: string): FakeTransaction {
-    return new FakeTransaction(this, name);
+  transaction(names: string | string[]): FakeTransaction {
+    const list = Array.isArray(names) ? names : [names];
+    return new FakeTransaction(this, list);
   }
 }
 
 /** Whether the next open should fail, and how many opens were asked for. */
 let openFails = false;
 let openCalls = 0;
+/** The database the fake handed out last, so a test can make a store fail. */
+let lastDb: FakeDatabase | null = null;
 
 function installIndexedDb(): void {
   Object.defineProperty(globalThis, "indexedDB", {
@@ -136,6 +194,7 @@ function installIndexedDb(): void {
             return;
           }
           const db = new FakeDatabase();
+          lastDb = db;
           req.result = db;
           req.onupgradeneeded?.();
           req.onsuccess?.();
@@ -164,6 +223,32 @@ function makeRun(over: Partial<Run> = {}): Run {
     results: [{ index: 0, transcript: "", outcome: null }],
     startedAt: 1_000,
     finishedAt: 2_000,
+    ...over,
+  };
+}
+
+function makeProfile(over: Partial<VoiceProfile> = {}): VoiceProfile {
+  return {
+    id: "p1",
+    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
+    counts: { next: 6, repeat: 6, stop: 6 },
+    enabled: true,
+    createdAt: 1_000,
+    updatedAt: 2_000,
+    trainedAt: 2_000,
+    ...over,
+  };
+}
+
+function makeHead(over: Partial<VoiceHead> = {}): VoiceHead {
+  return {
+    id: "p1",
+    formatVersion: 1,
+    baseModelId: "18w-v1",
+    labels: ["_background_noise_", "next", "repeat", "stop"],
+    kernel: new Float32Array(8),
+    kernelShape: [2, 4],
+    bias: new Float32Array(4),
     ...over,
   };
 }
@@ -218,11 +303,116 @@ describe("runs", () => {
   it("forgets every Run at once", async () => {
     const db = await store();
     await db.saveRun(makeRun({ id: "r1" }));
-    await db.saveRun(makeRun({ id: "r2" }));
 
     await db.clearRuns();
 
     expect(await db.listAllRuns()).toEqual([]);
+  });
+});
+
+describe("voice commands", () => {
+  it("keeps a profile and gives it back", async () => {
+    const db = await store();
+
+    await db.saveVoiceProfile(makeProfile(), makeHead());
+
+    const profile = await db.getVoiceProfile();
+    expect(profile).not.toBeNull();
+    expect(profile?.phrases.next).toBe("下一個");
+  });
+
+  it("keeps the head with the profile", async () => {
+    const db = await store();
+
+    await db.saveVoiceProfile(makeProfile(), makeHead());
+
+    const head = await db.getVoiceHead("p1");
+    expect(head?.labels).toEqual(["_background_noise_", "next", "repeat", "stop"]);
+    expect(Array.from(head?.kernel ?? [])).toEqual(Array.from({ length: 8 }, () => 0));
+  });
+
+  it("has no profile to begin with", async () => {
+    const db = await store();
+
+    expect(await db.getVoiceProfile()).toBeNull();
+  });
+
+  it("replaces the profile and the head when the same one is saved again", async () => {
+    const db = await store();
+    await db.saveVoiceProfile(makeProfile(), makeHead());
+
+    await db.saveVoiceProfile(
+      makeProfile({ phrases: { next: "go", repeat: "again", stop: "stop" } }),
+      makeHead({ kernel: new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]) }),
+    );
+
+    expect((await db.getVoiceProfile())?.phrases.next).toBe("go");
+    expect(Array.from((await db.getVoiceHead("p1"))?.kernel ?? [])).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
+  });
+
+  it("forgets the head along with the profile", async () => {
+    const db = await store();
+    await db.saveVoiceProfile(makeProfile(), makeHead());
+
+    await db.deleteVoiceProfile("p1");
+
+    expect(await db.getVoiceProfile()).toBeNull();
+    expect(await db.getVoiceHead("p1")).toBeNull();
+  });
+
+  it("keeps neither the profile nor the head when the head cannot be written", async () => {
+    const db = await store();
+    await db.saveVoiceProfile(makeProfile(), makeHead());
+    lastDb!.failWritesIn.add("voiceHeads");
+
+    await expect(
+      db.saveVoiceProfile(makeProfile({ id: "p2" }), makeHead({ id: "p2" })),
+    ).rejects.toThrow();
+
+    // The profile is not left behind without a head to go with it.
+    expect((await db.getVoiceProfile())?.id).toBe("p1");
+    expect(await db.getVoiceHead("p2")).toBeNull();
+  });
+
+  it("changes the names without touching the head", async () => {
+    const db = await store();
+    await db.saveVoiceProfile(makeProfile(), makeHead());
+
+    await db.renameVoiceProfile("p1", { next: "go", repeat: "again", stop: "halt" }, 3_000);
+
+    const profile = await db.getVoiceProfile();
+    expect(profile?.phrases).toEqual({ next: "go", repeat: "again", stop: "halt" });
+    expect(profile?.updatedAt).toBe(3_000);
+    // The head is the same one: renaming is a change of labels.
+    expect((await db.getVoiceHead("p1"))?.labels).toEqual([
+      "_background_noise_",
+      "next",
+      "repeat",
+      "stop",
+    ]);
+  });
+
+  it("will not rename commands that are not there", async () => {
+    const db = await store();
+
+    await expect(
+      db.renameVoiceProfile("p1", { next: "go", repeat: "again", stop: "halt" }, 3_000),
+    ).rejects.toThrow();
+  });
+
+  it("keeps the old names when the store will not take the new ones", async () => {
+    const db = await store();
+    await db.saveVoiceProfile(makeProfile(), makeHead());
+    lastDb!.failWritesIn.add("voiceProfiles");
+
+    await expect(
+      db.renameVoiceProfile("p1", { next: "go", repeat: "again", stop: "halt" }, 3_000),
+    ).rejects.toThrow();
+
+    // A rename that half-happened would be worse than one that did not.
+    expect((await db.getVoiceProfile())?.phrases.next).toBe("下一個");
   });
 });
 

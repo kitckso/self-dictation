@@ -134,8 +134,8 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
         // There is nothing to show: the store could not be read at all. Saying
         // "Nothing yet" underneath would claim it is empty instead.
         <p className="note bad">
-          Your past runs could not be read. This browser is blocking storage — private browsing
-          or a full store is the usual reason.
+          Your past runs could not be read. This browser is blocking storage — private browsing or a
+          full store is the usual reason.
         </p>
       ) : (
         <>

@@ -10,9 +10,7 @@ describe("speechCommandUrls", () => {
   });
 
   it("keeps a deployed base path", () => {
-    expect(
-      speechCommandUrls("/self-dictation/", "https://example.com/self-dictation/"),
-    ).toEqual({
+    expect(speechCommandUrls("/self-dictation/", "https://example.com/self-dictation/")).toEqual({
       model: "https://example.com/self-dictation/models/speech-commands/18w/model.json",
       metadata: "https://example.com/self-dictation/models/speech-commands/18w/metadata.json",
     });

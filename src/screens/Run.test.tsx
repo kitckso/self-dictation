@@ -4,7 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { webSpeech } from "../tts";
 import type { SpeakResult } from "../tts";
 import type { DictationCommand } from "../voice/commands";
-import { UnavailableCommandError } from "../voice/errors";
+import { HeadMismatchError, UnavailableCommandError } from "../voice/errors";
 import { Run, type RunState } from "./Run";
 
 vi.mock("../tts", () => ({
@@ -469,9 +469,7 @@ describe("Run", () => {
     await commands.hear("next");
 
     expect(screen.getByText("2/2")).toBeTruthy();
-    await waitFor(() =>
-      expect(webSpeech.speak).toHaveBeenCalledWith("醫院", expect.anything()),
-    );
+    await waitFor(() => expect(webSpeech.speak).toHaveBeenCalledWith("醫院", expect.anything()));
   });
 
   it("stops listening while the voice speaks, so it cannot hear itself", async () => {
@@ -515,6 +513,45 @@ describe("Run", () => {
     });
 
     expect(screen.getByText(/voice commands: say/i)).toBeTruthy();
+  });
+
+  it("names the built-in English words when there are no custom commands", async () => {
+    render(<Run run={vocabRun()} onFinish={() => {}} commands={voiceCommands()} />);
+
+    expect(await screen.findByText(/say .go. or .yes. to play the next chunk/i)).toBeTruthy();
+  });
+
+  it("names the person's own commands when they have trained some", async () => {
+    render(
+      <Run
+        run={vocabRun()}
+        onFinish={() => {}}
+        commands={voiceCommands()}
+        commandPhrases={{ next: "下一個", repeat: "再嚟一次", stop: "停" }}
+      />,
+    );
+
+    expect(await screen.findByText(/say .下一個. to play the next chunk/i)).toBeTruthy();
+    expect(screen.getByText(/再嚟一次. to hear this one again/i)).toBeTruthy();
+    expect(screen.getByText(/.停. to stop, then again to end/i)).toBeTruthy();
+    // The built-in words are not what this person says.
+    expect(screen.queryByText(/say .go. or .yes./i)).toBeNull();
+  });
+
+  it("asks for the person's own stop word again to end the Run", async () => {
+    const commands = voiceCommands();
+    render(
+      <Run
+        run={vocabRun()}
+        onFinish={() => {}}
+        commands={commands}
+        commandPhrases={{ next: "下一個", repeat: "再嚟一次", stop: "停" }}
+      />,
+    );
+
+    await commands.hear("stop");
+
+    expect(screen.getByText(/say .停. again after a second/i)).toBeTruthy();
   });
 
   it("asks for a second stop before ending the Run with nothing playing", async () => {
@@ -571,7 +608,9 @@ describe("Run", () => {
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
 
     expect(
-      await screen.findByText(/voice commands are unavailable \(microphone permission is blocked\)/i),
+      await screen.findByText(
+        /voice commands are unavailable \(microphone permission is blocked\)/i,
+      ),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -590,6 +629,19 @@ describe("Run", () => {
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
 
     expect(await screen.findByText(/microphones need HTTPS or localhost/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("does not offer a retry when the commands have to be trained again", async () => {
+    const commands = {
+      start: vi.fn().mockRejectedValue(new HeadMismatchError()),
+      stop: vi.fn(() => Promise.resolve()),
+    };
+    render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
+
+    // Only training again can put this right, so a "Try again" button would
+    // be a promise the app cannot keep.
+    expect(await screen.findByText(/need to be retrained/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 

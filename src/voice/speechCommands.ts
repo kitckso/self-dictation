@@ -1,10 +1,8 @@
 import "@tensorflow/tfjs";
-import * as speechCommands from "@tensorflow-models/speech-commands";
-import { COMMAND_CONFIDENCE, commandFor, type DictationCommand } from "./commands";
+import { bestCommand, COMMAND_CONFIDENCE, type DictationCommand } from "./commands";
 import type { CommandListener } from "./CommandListener";
-import { UnavailableCommandError } from "./errors";
-import { microphoneAvailable } from "./microphone";
-import { speechCommandUrls } from "./modelUrls";
+import { ensureMicrophone, MIC_RELEASE_MS, RAW_MICROPHONE } from "./microphone";
+import { recognizerForListening, type ListeningRecognizer } from "./recognizer";
 
 /**
  * Speech commands, on the device.
@@ -12,84 +10,14 @@ import { speechCommandUrls } from "./modelUrls";
  * The 18-word model is served from this app rather than from Google's CDN, so
  * the feature works offline and no audio — or anything else — leaves the
  * device. Only three of its words are commands; the rest are ignored.
- */
-
-const { model: MODEL_URL, metadata: METADATA_URL } = speechCommandUrls(
-  import.meta.env.BASE_URL,
-  document.baseURI,
-);
-
-/**
- * Android ties media playback to the microphone's audio route. Opening the
- * microphone with the browser's default speech-processing constraints can put
- * the device into a communication audio mode, so the Voice gets quieter or
- * louder as capture starts and stops. Asking for the raw microphone avoids
- * that route on Android; the model normalizes its own input, so it does not
- * need the browser's gain control.
- */
-const ANDROID = /android/i;
-const ON_ANDROID = ANDROID.test(navigator.userAgent);
-const RAW_MICROPHONE: MediaTrackConstraints = ON_ANDROID
-  ? {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    }
-  : {};
-
-/**
- * Android needs a moment after `stopListening` before the audio route is back
- * on the speaker. The Voice should not start inside that window.
- */
-const MIC_RELEASE_MS = ON_ANDROID ? 200 : 0;
-
-type Recognizer = ReturnType<typeof speechCommands.create>;
-
-let loading: Promise<Recognizer> | null = null;
-/** True once the browser has granted the microphone at least once this page. */
-let microphoneReady = false;
-
-function loadRecognizer(): Promise<Recognizer> {
-  loading ??= (async () => {
-    const recognizer = speechCommands.create("BROWSER_FFT", undefined, MODEL_URL, METADATA_URL);
-    await recognizer.ensureModelLoaded();
-    return recognizer;
-  })().catch((error: unknown) => {
-    // A failed load is worth retrying next time rather than remembering.
-    loading = null;
-    throw error;
-  });
-  return loading;
-}
-
-/**
- * Ask for the microphone before doing anything expensive.
  *
- * `getUserMedia` is what makes the browser prompt. Asking first means a
- * refusal is reported as a refusal instead of being hidden behind a model
- * download, and the model is not fetched for someone who will not allow the
- * microphone. The stream is closed again immediately; listening opens it for
- * real once the model is ready.
+ * A person can replace those three words with their own, trained on this
+ * device. The recognizer that is used is then the trained one rather than
+ * this file's model — see `recognizer.ts`.
  */
-async function ensureMicrophone(): Promise<void> {
-  if (microphoneReady) return;
-  if (typeof window !== "undefined" && window.isSecureContext === false) {
-    throw new UnavailableCommandError("microphones need HTTPS or localhost");
-  }
-  if (!microphoneAvailable()) {
-    throw new UnavailableCommandError("this browser cannot use a microphone");
-  }
-  let stream: MediaStream | null = null;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_MICROPHONE });
-    microphoneReady = true;
-  } finally {
-    for (const track of stream?.getTracks() ?? []) track.stop();
-  }
-}
 
 class SpeechCommandListener implements CommandListener {
-  private recognizer: Recognizer | null = null;
+  private recognizer: ListeningRecognizer | null = null;
   private generation = 0;
   /** A stop under way, which the next start has to wait for. */
   private stopping: Promise<void> = Promise.resolve();
@@ -102,9 +30,7 @@ class SpeechCommandListener implements CommandListener {
 
   start(onCommand: (command: DictationCommand) => void): Promise<void> {
     const generation = ++this.generation;
-    const next = this.starting
-      .catch(() => {})
-      .then(() => this.begin(generation, onCommand));
+    const next = this.starting.catch(() => {}).then(() => this.begin(generation, onCommand));
     // Keep the queue alive after a failed start; the caller still sees `next`.
     this.starting = next.catch(() => {});
     return next;
@@ -118,11 +44,22 @@ class SpeechCommandListener implements CommandListener {
     await ensureMicrophone();
     if (generation !== this.generation) return;
 
-    let recognizer: Recognizer;
+    let recognizer: ListeningRecognizer;
     try {
-      recognizer = await loadRecognizer();
+      recognizer = await recognizerForListening();
     } catch (error) {
       console.error("Voice-command model failed to load", error);
+      // A head that does not fit the model is worth saying out loud: it means
+      // the person's own commands need training again, and falling back to
+      // the built-in English words without saying so would look like their
+      // commands had simply stopped working.
+      //
+      // It is passed on as it is, so that the app can tell it apart from a
+      // failure that another try might fix: this one needs training again,
+      // not a retry.
+      if (error instanceof Error && error.name === "HeadMismatchError") {
+        throw error;
+      }
       throw new Error("the voice-command model could not be loaded", { cause: error });
     }
     if (generation !== this.generation) return;
@@ -141,11 +78,7 @@ class SpeechCommandListener implements CommandListener {
         // Streaming recognition yields one row of scores; batched recognition
         // would not, and there is nothing to read if it did.
         if (!(scores instanceof Float32Array)) return Promise.resolve();
-        let best = 0;
-        for (let i = 1; i < scores.length; i++) {
-          if ((scores[i] ?? 0) > (scores[best] ?? 0)) best = i;
-        }
-        const command = commandFor(labels[best] ?? "", scores[best] ?? 0);
+        const command = bestCommand(labels, scores);
         if (command) onCommand(command);
         return Promise.resolve();
       },

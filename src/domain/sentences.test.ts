@@ -62,9 +62,7 @@ describe("toSentences", () => {
       "He earned a Ph.D.",
       "Then he left.",
     ]);
-    expect(toSentences("She has an M.Sc. in physics.")).toEqual([
-      "She has an M.Sc. in physics.",
-    ]);
+    expect(toSentences("She has an M.Sc. in physics.")).toEqual(["She has an M.Sc. in physics."]);
   });
 
   it("lets a suffix end a sentence but not cut a name in half", () => {
