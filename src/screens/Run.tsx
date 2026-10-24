@@ -11,6 +11,8 @@ import { significantLength } from "../domain/chunking";
 import { DEFAULT_RATE, formatRate, MAX_RATE, MIN_RATE, stepRate } from "../domain/rate";
 import { languageById, type LanguageId, type Mode } from "../domain/types";
 import { webSpeech } from "../tts";
+import type { CommandListener } from "../voice/CommandListener";
+import { describeCommandError, type CommandFailure } from "../voice/errors";
 
 export interface RunState {
   title: string;
@@ -29,6 +31,13 @@ interface Props {
   run: RunState;
   /** What was typed, one entry per Chunk. Empty strings where nothing was. */
   onFinish: (transcripts: string[]) => void;
+  /**
+   * Hears go/yes/stop. Absent when there is nothing to listen with, which is
+   * also what keeps the microphone out of tests that are about speech alone.
+   */
+  commands?: CommandListener;
+  /** Play the first Chunk once as soon as the Run opens. */
+  autoStart?: boolean;
 }
 
 type AnswerOn = "paper" | "typed";
@@ -46,9 +55,20 @@ function defaultAnswerOn(lang: LanguageId): AnswerOn {
   return lang === "en" ? "typed" : "paper";
 }
 
+/**
+ * How long a second "stop" can take to confirm ending the Run.
+ *
+ * The recognizer ignores everything for about a second after hearing the
+ * first "stop", so the prompt asks for a pause; this leaves about five
+ * seconds in which the confirmation is actually heard.
+ */
+const END_CONFIRM_MS = 6_000;
+
 /** What to say when the voice did not finish. */
 function failureReason(result: "cut-off" | "failed"): string {
-  return result === "cut-off" ? "the voice stopped before it finished" : "the browser refused to speak";
+  return result === "cut-off"
+    ? "the voice stopped before it finished"
+    : "the browser refused to speak";
 }
 
 /**
@@ -58,12 +78,21 @@ function failureReason(result: "cut-off" | "failed"): string {
  * Nothing about the material appears here — no Reference, no score. Listen,
  * write it down, and the whole Passage is revealed at once on Results.
  */
-export function Run({ run, onFinish }: Props) {
+export function Run({ run, onFinish, commands, autoStart = false }: Props) {
   const [transcripts, setTranscripts] = useState<Record<number, string>>({});
   const [cursor, setCursor] = useState(0);
   const [speaking, setSpeaking] = useState<number | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [commandError, setCommandError] = useState<CommandFailure | null>(null);
+  /** Bumped when the person asks to try the microphone again. */
+  const [commandRetry, setCommandRetry] = useState(0);
+  /** True until the model and microphone have actually started listening. */
+  const [commandStarting, setCommandStarting] = useState(Boolean(commands));
+  /** A first "stop" is waiting for a second one to confirm ending the Run. */
+  const [endArmed, setEndArmed] = useState(false);
   const [auto, setAuto] = useState(false);
+  /** Bumped to restart auto-play from the cursor, even if it was already on. */
+  const [autoRun, setAutoRun] = useState(0);
   const [autoOpen, setAutoOpen] = useState(false);
   const [repeats, setRepeats] = useState(2);
   const [delaySec, setDelaySec] = useState(5);
@@ -89,6 +118,18 @@ export function Run({ run, onFinish }: Props) {
   const playGen = useRef(0);
   /** Where auto-play should start; read without making the effect depend on the cursor. */
   const cursorRef = useRef(cursor);
+  /** The live answer for the voice handler, which outlives a render. */
+  const endArmedRef = useRef(false);
+  const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * What the voice-command handler reads.
+   *
+   * Listening is torn down only while the speaker is busy, so the handler it
+   * was given can be a render or two old by the time a command arrives. These
+   * refs are the live answer.
+   */
+  const transcriptsRef = useRef(transcripts);
+  const playingRef = useRef(playing);
   /**
    * The settings auto-play reads, deliberately held in a ref rather than named
    * as dependencies of the loop.
@@ -100,7 +141,24 @@ export function Run({ run, onFinish }: Props) {
    */
   const settings = useRef({ rate, repeats, delaySec });
 
-  useEffect(() => () => webSpeech.cancel(), []);
+  useEffect(
+    () => () => {
+      webSpeech.cancel();
+      if (endTimer.current !== null) clearTimeout(endTimer.current);
+    },
+    [],
+  );
+
+  /**
+   * Start the Run with one play, not with auto-play.
+   *
+   * Opening a Run should put something in the ear straight away, then wait:
+   * auto-play stays a separate choice, and "go" plays one more Chunk.
+   */
+  useEffect(() => {
+    if (!autoStart) return;
+    void playOnce(0);
+  }, [autoStart]);
 
   useEffect(() => {
     settings.current = { rate, repeats, delaySec };
@@ -109,6 +167,62 @@ export function Run({ run, onFinish }: Props) {
   useEffect(() => {
     cursorRef.current = cursor;
   }, [cursor]);
+
+  useEffect(() => {
+    transcriptsRef.current = transcripts;
+  }, [transcripts]);
+
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
+
+  /**
+   * Listen for "go"/"yes", "no", or "stop" whenever the device is quiet.
+   *
+   * The microphone is let go while the voice speaks: on a phone's speaker the
+   * app would otherwise hear its own dictation and steer itself.
+   */
+  useEffect(() => {
+    if (!commands || speaking !== null) return;
+    let active = true;
+    setCommandStarting(true);
+    void commands
+      .start((command) => {
+        if (!active) return;
+        if (command === "next") {
+          disarmEnd();
+          nextAndPlay();
+        } else if (command === "repeat") {
+          disarmEnd();
+          repeatCurrent();
+        } else if (playingRef.current) {
+          // First "stop" silences playback; a second one confirms the end.
+          stopPlayback();
+          armEnd();
+        } else if (endArmedRef.current) {
+          disarmEnd();
+          finish();
+        } else {
+          // Nothing was playing: treat this as the first half of an end.
+          armEnd();
+        }
+      })
+      .then(() => {
+        if (!active) return;
+        setCommandStarting(false);
+        setCommandError(null);
+      })
+      .catch((error: unknown) => {
+        console.error("Voice commands could not start", error);
+        if (!active) return;
+        setCommandStarting(false);
+        setCommandError(describeCommandError(error));
+      });
+    return () => {
+      active = false;
+      commands.stop();
+    };
+  }, [commands, speaking, commandRetry]);
 
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-slot="${cursor}"]`);
@@ -120,7 +234,6 @@ export function Run({ run, onFinish }: Props) {
     const gen = ++playGen.current;
     const mine = () => gen === playGen.current;
     const chunks = run.chunks;
-
     void (async () => {
       // Planned one Chunk at a time, so repeats and pause are read when the
       // next Chunk starts rather than by restarting the one already speaking.
@@ -138,6 +251,9 @@ export function Run({ run, onFinish }: Props) {
           setCursor(step.index);
           setSpeaking(step.index);
           setSpeechError(null);
+          // Let the microphone go before the speaker starts, rather than
+          // waiting for the effect that follows this render.
+          commands?.stop();
           const heard = await webSpeech.speak(chunks[step.index] ?? "", {
             lang: tag,
             rate: settings.current.rate,
@@ -154,6 +270,9 @@ export function Run({ run, onFinish }: Props) {
             setAuto(false);
             return;
           }
+          // The speaker is quiet again during the pause that follows, so the
+          // microphone can listen for "stop" between plays.
+          setSpeaking(null);
         }
       }
       if (!mine()) return;
@@ -164,7 +283,7 @@ export function Run({ run, onFinish }: Props) {
     return () => {
       playGen.current += 1;
     };
-  }, [auto, run.chunks, tag]);
+  }, [auto, autoRun, run.chunks, tag]);
 
   /** Silence whoever is speaking and forget them. */
   function stopPlayback() {
@@ -174,26 +293,55 @@ export function Run({ run, onFinish }: Props) {
     setSpeaking(null);
   }
 
+  /**
+   * Open the confirmation window for ending the Run.
+   *
+   * A misheard word should not be able to end a dictation by itself, so the
+   * first "stop" in silence only arms the end; a second one within the window
+   * finishes it.
+   */
+  function armEnd() {
+    endArmedRef.current = true;
+    setEndArmed(true);
+    if (endTimer.current !== null) clearTimeout(endTimer.current);
+    endTimer.current = setTimeout(() => {
+      endTimer.current = null;
+      endArmedRef.current = false;
+      setEndArmed(false);
+    }, END_CONFIRM_MS);
+  }
+
+  function disarmEnd() {
+    endArmedRef.current = false;
+    setEndArmed(false);
+    if (endTimer.current !== null) {
+      clearTimeout(endTimer.current);
+      endTimer.current = null;
+    }
+  }
+
   function toggleAuto() {
+    disarmEnd();
     if (auto) stopPlayback();
     else setAuto(true);
   }
 
   /** Moving the cursor deliberately ends auto-play rather than fighting it. */
   function focusSlot(i: number) {
+    disarmEnd();
     if (auto) stopPlayback();
     setCursor(i);
   }
 
-  async function speak(i: number) {
-    // While something is already playing, the button reads "stop" — so stop.
-    if (playing) {
-      stopPlayback();
-      return;
-    }
+  /** Say one Chunk once, without touching auto-play. */
+  async function playOnce(i: number) {
+    disarmEnd();
     const gen = ++playGen.current;
     setSpeaking(i);
     setSpeechError(null);
+    // Silence the microphone before the voice speaks; the listener must not
+    // hear the app's own dictation.
+    commands?.stop();
     try {
       const heard = await webSpeech.speak(run.chunks[i] ?? "", {
         lang: tag,
@@ -209,19 +357,76 @@ export function Run({ run, onFinish }: Props) {
     }
   }
 
+  async function speak(i: number) {
+    // While something is already playing, the button reads "stop" — so stop.
+    if (playing) {
+      disarmEnd();
+      stopPlayback();
+      return;
+    }
+    await playOnce(i);
+  }
+
   function next() {
+    disarmEnd();
     stopPlayback();
     setCursor((c) => Math.min(c + 1, run.chunks.length - 1));
   }
+  /**
+   * The voice's "go": move on and say the next Chunk once.
+   *
+   * This deliberately does not reuse `next()`, which is the rail's quiet
+   * "move the cursor" action, and it does not switch auto-play on. If
+   * auto-play is already running, it stays on and restarts from the next
+   * Chunk; otherwise the next Chunk is played once and the Run waits again.
+   */
+  function nextAndPlay() {
+    const nextIndex = Math.min(cursorRef.current + 1, run.chunks.length - 1);
+    if (nextIndex === cursorRef.current) return;
+    // The microphone only listens in silence, so "playing" here means the
+    // person had auto-play on before saying "go".
+    const continueAuto = playingRef.current;
+    stopPlayback();
+    // Set the ref too: the new play reads it as soon as it starts.
+    cursorRef.current = nextIndex;
+    setCursor(nextIndex);
+    if (continueAuto) {
+      setAuto(true);
+      setAutoRun((n) => n + 1);
+    } else {
+      void playOnce(nextIndex);
+    }
+  }
+  /**
+   * The voice's "no": say the current Chunk again.
+   *
+   * One-shot like "go". With auto-play off, play it once and wait. If
+   * auto-play is already on, replay from this Chunk and keep going.
+   */
+  function repeatCurrent() {
+    // The microphone only listens in silence, so "playing" here means the
+    // person had auto-play on before saying "no".
+    const continueAuto = playingRef.current;
+    stopPlayback();
+    if (continueAuto) {
+      setAuto(true);
+      setAutoRun((n) => n + 1);
+    } else {
+      void playOnce(cursorRef.current);
+    }
+  }
   function back() {
+    disarmEnd();
     stopPlayback();
     setCursor((c) => Math.max(c - 1, 0));
   }
 
   /** End the Run and reveal the whole Passage, whether or not all of it was answered. */
   function finish() {
+    disarmEnd();
     stopPlayback();
-    onFinish(run.chunks.map((_, i) => transcripts[i] ?? ""));
+    const answers = transcriptsRef.current;
+    onFinish(run.chunks.map((_, i) => answers[i] ?? ""));
   }
 
   return (
@@ -242,6 +447,35 @@ export function Run({ run, onFinish }: Props) {
           </p>
         )}
 
+        {commands && (
+          <p className={commandError ? "note bad" : "note"}>
+            {commandError ? (
+              <>
+                Voice commands are unavailable ({commandError.message}). The buttons still work.{" "}
+                {commandError.retryable && (
+                  <button
+                    className="mini"
+                    onClick={() => {
+                      setCommandError(null);
+                      setCommandRetry((n) => n + 1);
+                    }}
+                  >
+                    Try again
+                  </button>
+                )}
+              </>
+            ) : endArmed ? (
+              "Say “stop” again after a second to end the Run."
+            ) : speaking !== null ? (
+              "Voice commands are paused while the Voice speaks."
+            ) : commandStarting ? (
+              "Starting voice commands…"
+            ) : (
+              "Voice commands: say “go” or “yes” to play the next chunk, “no” to hear this one again; “stop” to stop, then again to end."
+            )}
+          </p>
+        )}
+
         <div className="answer-on">
           <div className="seg">
             <button aria-pressed={answerOn === "paper"} onClick={() => setAnswerOn("paper")}>
@@ -251,11 +485,6 @@ export function Run({ run, onFinish }: Props) {
               Type it
             </button>
           </div>
-          <p className="note">
-            {run.language === "en"
-              ? "Typing English tests spelling directly, so either works."
-              : "Writing Chinese by hand is the skill being practised. Typing through an input method (pinyin, Cangjie) produces the right characters without you knowing how to form them, so a typed score measures the input method, not you."}
-          </p>
         </div>
 
         {run.chunks.map((chunk, i) => (

@@ -16,6 +16,12 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
+      workbox: {
+        // The speech-commands model is served from this app so voice commands
+        // work offline; its weight shards have no file extension.
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,json,webmanifest}", "models/**/*"],
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+      },
       manifest: {
         name: "Self Dictation",
         short_name: "Dictation",

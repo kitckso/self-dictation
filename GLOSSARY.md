@@ -72,6 +72,16 @@ device may clamp or ignore it, so a Speed is a request to the Voice rather than
 a promise about what will be heard.
 _Avoid_: Rate, tempo, playback speed
 
+**Voice Command**:
+A word said aloud to steer a Run without touching the screen: "go" or "yes" to
+move to the next Chunk and play it, "no" to play the current Chunk again, and
+"stop" to silence auto-play. A second "stop" within a few seconds ends the Run,
+so one misheard word cannot end a dictation by itself. Heard on the device by a
+small English speech-command model, so the audio never leaves it. A Voice
+Command is only heard while the Voice is quiet — otherwise the app would hear
+its own dictation and steer itself.
+_Avoid_: Voice control, speech recognition, wake word
+
 **Reference**:
 The authoritative text for a Chunk or Vocabulary Item. It is never shown
 while dictating — a person who can see it does not need to listen.

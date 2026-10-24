@@ -96,6 +96,10 @@ h2 {
 .note.good {
   color: var(--ok);
 }
+.note .mini {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
 .voice-test {
   display: flex;
   flex-direction: column;

@@ -53,15 +53,21 @@ Screen", or host `dist/` on any static host.
    you have set up into a link — and a QR code — to hand to somebody else.
 2. **Run** — each Chunk gets its own numbered slot so you can see how much is
    left without seeing a word of it. Listen and write; the app shows nothing to
-   check yourself against. Navigation never moves past a Chunk on its own.
-   **Auto-play** walks the Run for you: the bottom bar sets how many times each
-   Chunk is spoken, how long to pause before the next play or repeat, and how
-   fast the Voice speaks — 2 times, 5 seconds, and its natural pace to begin
-   with. Speed applies to every play, not just auto-play. Changing a setting
-   never interrupts the play under way — it finishes as it began — and the
-   change lands on the next play for Speed, on the next Chunk for repeats and
-   pause. Auto-play stops when you touch a speech control, move the cursor, or
-   reach the end.
+   check yourself against. Navigation never moves past a Chunk on its own. A Run
+   opens by playing the first Chunk once, then waiting. **Auto-play** is a
+   separate choice: turn it on and it walks the Run for you. The bottom bar sets
+   how many times each Chunk is spoken, how long to pause before the next play
+   or repeat, and how fast the Voice speaks — 2 times, 5 seconds, and its
+   natural pace to begin with. Speed applies to every play, not just auto-play.
+   Changing a setting never interrupts the play under way — it finishes as it
+   began — and the change lands on the next play for Speed, on the next Chunk
+   for repeats and pause. Auto-play stops when you touch a speech control, move
+   the cursor, or reach the end. **Voice commands** listen on every Run: say
+   “go” or “yes” to move to the next Chunk and play it, “no” to hear the current
+   Chunk again, and “stop” to silence auto-play. A second “stop” within a few
+   seconds ends the Run, so a single misheard word cannot end it by itself. The
+   microphone is released while the Voice speaks, so the app cannot hear its own
+   dictation. The words are English, and the recognition runs on the device.
 3. **Results** — every Reference appears at once, beside what you typed and a
    diff of the two, or the ✓ all / ~ some / ✗ wrong buttons for what you wrote
    on paper. The score is the mean of both and settles as you mark.
@@ -114,6 +120,9 @@ Everything stays in your browser. Collections, Run history and your Progress
 are stored in IndexedDB; nothing is uploaded anywhere, because there is nowhere
 to upload it. Clearing site data erases it.
 
+Voice commands are heard by a speech-command model running on the device. The
+microphone audio is not recorded and is never sent anywhere.
+
 A shared link carries the dictation itself, deflated and encoded into the part
 of the URL after the `#`. That part is never sent to the host — which is why
 sharing needs no server, and why the link opens offline. It also means anyone
@@ -125,6 +134,7 @@ holding the link holds the text, so send it the way you would send the text.
 src/
   domain/       types, chunking, grading, progress, share encoding — no React, no browser APIs
   tts/          TtsProvider seam + the Web Speech implementation
+  voice/        on-device voice commands + the bundled speech-command model
   storage/      IndexedDB
   screens/      Setup, Run, Results, History, Share
   lib/          small helpers
@@ -133,8 +143,9 @@ src/
 The domain layer is deliberately free of UI and browser concerns, and speech
 sits behind `TtsProvider` so a hosted provider can be added later without
 touching the screens. The share codec is the one exception: it uses the
-platform's own DEFLATE rather than bundling one. QR generation is the project's
-only runtime dependency other than React.
+platform's own DEFLATE rather than bundling one. QR generation and TensorFlow.js
+(for voice commands) are the other runtime dependencies; both are bundled into
+the app rather than fetched at run time.
 
 See [GLOSSARY.md](GLOSSARY.md) for the vocabulary this project uses.
 
@@ -150,6 +161,10 @@ See [GLOSSARY.md](GLOSSARY.md) for the vocabulary this project uses.
 - Punctuation, whitespace and English case are ignored when grading. Traditional
   and Simplified Chinese are treated as different characters, so typing 简 into a
   繁 passage counts as wrong.
+- Voice commands are English words, need microphone permission and a quiet
+  room, and need HTTPS or localhost. Recognition is good, not perfect: a word in
+  the room can be heard as a command. The model ships with the app (a few
+  megabytes), so it still works offline and no audio is uploaded.
 
 ## License
 

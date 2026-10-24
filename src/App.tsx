@@ -6,6 +6,7 @@ import { saveRun } from "./storage/db";
 import { newId } from "./lib/id";
 import { isSupported, onVoicesChanged, webSpeech } from "./tts";
 import type { VoiceOption } from "./tts";
+import { canTryVoiceCommands, voiceCommands } from "./voice";
 import { Setup } from "./screens/Setup";
 import { Results } from "./screens/Results";
 import { History } from "./screens/History";
@@ -225,7 +226,12 @@ export default function App() {
         />
       )}
       {screen.name === "run" && (
-        <Run run={screen.run} onFinish={(transcripts) => finish(screen.run, transcripts)} />
+        <Run
+          run={screen.run}
+          onFinish={(transcripts) => finish(screen.run, transcripts)}
+          commands={canTryVoiceCommands() ? voiceCommands : undefined}
+          autoStart
+        />
       )}
       {screen.name === "results" && (
         <Results
