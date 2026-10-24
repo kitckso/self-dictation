@@ -220,6 +220,37 @@ h2 {
   opacity: 0.4;
 }
 
+/* ---------- setup: the actions stay where they are ---------- */
+/* The Share button appears as soon as there is something to dictate, so the
+   actions cannot live in the flow above the Start button: loading a sample or
+   a drill would push the Start button down and out of reach. They are pinned
+   to the bottom of the window instead, and everything that comes and goes
+   sits above the Start button so that it never moves. */
+.setup-foot {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 5;
+  width: 460px;
+  max-width: calc(100vw - 20px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: #000000d8;
+  backdrop-filter: blur(10px);
+}
+.setup-foot .note {
+  margin: 0;
+}
+/* Room for the pinned bar, so the last section of the form can still be read. */
+.setup-page {
+  padding-bottom: calc(190px + env(safe-area-inset-bottom));
+}
+
 .su-head {
   padding: 20px 2px 0;
   display: flex;

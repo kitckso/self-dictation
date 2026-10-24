@@ -150,7 +150,7 @@ export function Setup({
   }
 
   return (
-    <div className="pad stack">
+    <div className="pad stack setup-page">
       <header className="su-head">
         <h1>Self dictation</h1>
         <button className="rowbtn" onClick={onHistory}>
@@ -326,23 +326,31 @@ export function Setup({
         </section>
       )}
 
-      {canStart && (
-        <button className="btn" onClick={() => setSharing((open) => !open)}>
-          {sharing ? "Hide the link" : "Share a link"}
-        </button>
-      )}
       {canStart && sharing && <Share setup={shareable} onClose={() => setSharing(false)} />}
 
-      <button className="btn primary" disabled={!canStart} onClick={() => void save()}>
-        Start dictation
-      </button>
-      {canStart && (
-        <p className="note" style={{ textAlign: "center" }}>
-          {saved
-            ? `Updates the saved collection “${saved.title}”.`
-            : "Saves to this browser so you can drill it again."}
-        </p>
-      )}
+      {/*
+        The actions are pinned to the bottom of the window. Loading a sample or
+        a drill reveals the Share button, and it must not push the Start button
+        out of reach: everything that comes and goes sits above it, so the Start
+        button keeps the same place on screen no matter what is in the form.
+      */}
+      <div className="setup-foot">
+        {canStart && (
+          <p className="note" style={{ textAlign: "center" }}>
+            {saved
+              ? `Updates the saved collection “${saved.title}”.`
+              : "Saves to this browser so you can drill it again."}
+          </p>
+        )}
+        {canStart && (
+          <button className="btn" onClick={() => setSharing((open) => !open)}>
+            {sharing ? "Hide the link" : "Share a link"}
+          </button>
+        )}
+        <button className="btn primary" disabled={!canStart} onClick={() => void save()}>
+          Start dictation
+        </button>
+      </div>
     </div>
   );
 }

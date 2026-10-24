@@ -91,6 +91,23 @@ describe("Setup", () => {
     expect(screen.queryByRole("button", { name: /share/i })).toBeNull();
   });
 
+  it("keeps the start button where it is when the share button appears", () => {
+    renderSetup();
+
+    fireEvent.click(screen.getByRole("button", { name: /load sample/i }));
+
+    const start = screen.getByRole("button", { name: /start dictation/i });
+    const share = screen.getByRole("button", { name: /share/i });
+    const actions = start.parentElement;
+
+    // Both live in the pinned bar and the Start button is last in it, so
+    // revealing the Share button grows the bar upwards instead of pushing the
+    // Start button down and out of reach.
+    expect(actions?.className).toContain("setup-foot");
+    expect(actions?.contains(share)).toBe(true);
+    expect(actions?.lastElementChild).toBe(start);
+  });
+
   it("says the voice played when it did", async () => {
     renderSetup();
 
