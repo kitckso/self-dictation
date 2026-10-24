@@ -15,6 +15,13 @@ export interface CommandListener {
    * A listener speaks through `onCommand` until `stop` is called.
    */
   start(onCommand: (command: DictationCommand) => void): Promise<void>;
-  /** Stop listening and let the microphone go. */
-  stop(): void;
+  /**
+   * Stop listening and let the microphone go.
+   *
+   * Resolves once the stream has been released. A caller that is about to make
+   * a sound should wait for it: on Android the microphone and the speaker share
+   * an audio route, and starting the Voice while capture is still winding down
+   * makes the playback jump in volume.
+   */
+  stop(): Promise<void>;
 }

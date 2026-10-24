@@ -19,6 +19,30 @@ const { model: MODEL_URL, metadata: METADATA_URL } = speechCommandUrls(
   document.baseURI,
 );
 
+/**
+ * Android ties media playback to the microphone's audio route. Opening the
+ * microphone with the browser's default speech-processing constraints can put
+ * the device into a communication audio mode, so the Voice gets quieter or
+ * louder as capture starts and stops. Asking for the raw microphone avoids
+ * that route on Android; the model normalizes its own input, so it does not
+ * need the browser's gain control.
+ */
+const ANDROID = /android/i;
+const ON_ANDROID = ANDROID.test(navigator.userAgent);
+const RAW_MICROPHONE: MediaTrackConstraints = ON_ANDROID
+  ? {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    }
+  : {};
+
+/**
+ * Android needs a moment after `stopListening` before the audio route is back
+ * on the speaker. The Voice should not start inside that window.
+ */
+const MIC_RELEASE_MS = ON_ANDROID ? 200 : 0;
+
 type Recognizer = ReturnType<typeof speechCommands.create>;
 
 let loading: Promise<Recognizer> | null = null;
@@ -57,7 +81,7 @@ async function ensureMicrophone(): Promise<void> {
   }
   let stream: MediaStream | null = null;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_MICROPHONE });
     microphoneReady = true;
   } finally {
     for (const track of stream?.getTracks() ?? []) track.stop();
@@ -133,6 +157,7 @@ class SpeechCommandListener implements CommandListener {
         // Windows overlap by 0.5s, so 1s stops one spoken word being heard
         // twice while still letting a deliberate second command through.
         suppressionTimeMillis: 1000,
+        audioTrackConstraints: RAW_MICROPHONE,
       },
     );
 
@@ -140,12 +165,20 @@ class SpeechCommandListener implements CommandListener {
     if (generation !== this.generation) await recognizer.stopListening().catch(() => {});
   }
 
-  stop(): void {
+  stop(): Promise<void> {
     this.generation += 1;
     const recognizer = this.recognizer;
-    if (!recognizer || !recognizer.isListening()) return;
-    this.stopping = recognizer.stopListening().catch(() => {});
+    if (!recognizer || !recognizer.isListening()) return this.stopping;
+    this.stopping = recognizer
+      .stopListening()
+      .catch(() => {})
+      .then(() => wait(MIC_RELEASE_MS));
+    return this.stopping;
   }
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export const speechCommandsListener = new SpeechCommandListener();

@@ -45,6 +45,6 @@ export const voiceCommands: CommandListener = {
 
   stop() {
     generation += 1;
-    listener?.stop();
+    return listener?.stop() ?? Promise.resolve();
   },
 };

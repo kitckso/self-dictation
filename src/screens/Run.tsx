@@ -10,7 +10,7 @@ import {
 import { significantLength } from "../domain/chunking";
 import { DEFAULT_RATE, formatRate, MAX_RATE, MIN_RATE, stepRate } from "../domain/rate";
 import { languageById, type LanguageId, type Mode } from "../domain/types";
-import { webSpeech } from "../tts";
+import { isAndroidLike, webSpeech } from "../tts";
 import type { CommandListener } from "../voice/CommandListener";
 import { describeCommandError, type CommandFailure } from "../voice/errors";
 
@@ -64,6 +64,16 @@ function defaultAnswerOn(lang: LanguageId): AnswerOn {
  */
 const END_CONFIRM_MS = 6_000;
 
+/**
+ * A beat after the Voice stops before the microphone is reopened.
+ *
+ * Android takes a moment to move the audio route back from capture to
+ * playback. Reopening the microphone inside that window makes the next play
+ * start at the wrong volume, and the first word can be lost to the handover.
+ * Other platforms do not need the pause.
+ */
+const ANDROID_LISTEN_SETTLE_MS = 300;
+
 /** What to say when the voice did not finish. */
 function failureReason(result: "cut-off" | "failed"): string {
   return result === "cut-off"
@@ -82,6 +92,12 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
   const [transcripts, setTranscripts] = useState<Record<number, string>>({});
   const [cursor, setCursor] = useState(0);
   const [speaking, setSpeaking] = useState<number | null>(null);
+  /**
+   * The live answer for the listener effect. `setSpeaking` schedules a render,
+   * so the effect that runs in the same commit as `playOnce` would still see
+   * the old `null` and could open the microphone while the Voice is starting.
+   */
+  const speakingRef = useRef<number | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<CommandFailure | null>(null);
   /** Bumped when the person asks to try the microphone again. */
@@ -183,44 +199,59 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
    * app would otherwise hear its own dictation and steer itself.
    */
   useEffect(() => {
-    if (!commands || speaking !== null) return;
+    // `speaking` is the render's value; `speakingRef` is the synchronous one,
+    // so a listener cannot start in the same commit that begins a play.
+    if (!commands || speakingRef.current !== null) return;
     let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const start = () => {
+      if (!active) return;
+      void commands
+        .start((command) => {
+          if (!active) return;
+          if (command === "next") {
+            disarmEnd();
+            nextAndPlay();
+          } else if (command === "repeat") {
+            disarmEnd();
+            repeatCurrent();
+          } else if (playingRef.current) {
+            // First "stop" silences playback; a second one confirms the end.
+            stopPlayback();
+            armEnd();
+          } else if (endArmedRef.current) {
+            disarmEnd();
+            finish();
+          } else {
+            // Nothing was playing: treat this as the first half of an end.
+            armEnd();
+          }
+        })
+        .then(() => {
+          if (!active) return;
+          setCommandStarting(false);
+          setCommandError(null);
+        })
+        .catch((error: unknown) => {
+          console.error("Voice commands could not start", error);
+          if (!active) return;
+          setCommandStarting(false);
+          setCommandError(describeCommandError(error));
+        });
+    };
+
     setCommandStarting(true);
-    void commands
-      .start((command) => {
-        if (!active) return;
-        if (command === "next") {
-          disarmEnd();
-          nextAndPlay();
-        } else if (command === "repeat") {
-          disarmEnd();
-          repeatCurrent();
-        } else if (playingRef.current) {
-          // First "stop" silences playback; a second one confirms the end.
-          stopPlayback();
-          armEnd();
-        } else if (endArmedRef.current) {
-          disarmEnd();
-          finish();
-        } else {
-          // Nothing was playing: treat this as the first half of an end.
-          armEnd();
-        }
-      })
-      .then(() => {
-        if (!active) return;
-        setCommandStarting(false);
-        setCommandError(null);
-      })
-      .catch((error: unknown) => {
-        console.error("Voice commands could not start", error);
-        if (!active) return;
-        setCommandStarting(false);
-        setCommandError(describeCommandError(error));
-      });
+    if (isAndroidLike()) {
+      timer = setTimeout(start, ANDROID_LISTEN_SETTLE_MS);
+    } else {
+      start();
+    }
+
     return () => {
       active = false;
-      commands.stop();
+      if (timer !== undefined) clearTimeout(timer);
+      void commands.stop();
     };
   }, [commands, speaking, commandRetry]);
 
@@ -249,11 +280,11 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
           }
           firstPlay = false;
           setCursor(step.index);
-          setSpeaking(step.index);
-          setSpeechError(null);
+          beginSpeech(step.index);
           // Let the microphone go before the speaker starts, rather than
           // waiting for the effect that follows this render.
-          commands?.stop();
+          if (commands) await releaseMicrophone();
+          if (!mine()) return;
           const heard = await webSpeech.speak(chunks[step.index] ?? "", {
             lang: tag,
             rate: settings.current.rate,
@@ -266,17 +297,17 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
           // Carrying on would walk the cursor to the end in silence.
           if (heard !== "finished") {
             setSpeechError((prev) => prev ?? failureReason(heard));
-            setSpeaking(null);
+            endSpeech();
             setAuto(false);
             return;
           }
           // The speaker is quiet again during the pause that follows, so the
           // microphone can listen for "stop" between plays.
-          setSpeaking(null);
+          endSpeech();
         }
       }
       if (!mine()) return;
-      setSpeaking(null);
+      endSpeech();
       setAuto(false);
     })();
 
@@ -285,12 +316,39 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
     };
   }, [auto, autoRun, run.chunks, tag]);
 
+  /** Take the speaker, synchronously, so no listener starts behind it. */
+  function beginSpeech(index: number) {
+    speakingRef.current = index;
+    setSpeaking(index);
+    setSpeechError(null);
+  }
+
+  /** Give the speaker back and let the listening effect take over. */
+  function endSpeech() {
+    speakingRef.current = null;
+    setSpeaking(null);
+  }
+
+  /**
+   * Wait for the microphone to let go of the audio route.
+   *
+   * A custom listener may fail to stop; that is not a reason to swallow the
+   * play. The adapter itself already resolves on a failed stop.
+   */
+  async function releaseMicrophone(): Promise<void> {
+    try {
+      await commands?.stop();
+    } catch (error) {
+      console.error("Voice commands could not release the microphone", error);
+    }
+  }
+
   /** Silence whoever is speaking and forget them. */
   function stopPlayback() {
     playGen.current += 1;
     webSpeech.cancel();
     setAuto(false);
-    setSpeaking(null);
+    endSpeech();
   }
 
   /**
@@ -337,11 +395,12 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
   async function playOnce(i: number) {
     disarmEnd();
     const gen = ++playGen.current;
-    setSpeaking(i);
-    setSpeechError(null);
+    beginSpeech(i);
     // Silence the microphone before the voice speaks; the listener must not
-    // hear the app's own dictation.
-    commands?.stop();
+    // hear the app's own dictation. Wait for the release: on Android the
+    // speaker is on the other side of the same audio route.
+    if (commands) await releaseMicrophone();
+    if (gen !== playGen.current) return;
     try {
       const heard = await webSpeech.speak(run.chunks[i] ?? "", {
         lang: tag,
@@ -353,7 +412,7 @@ export function Run({ run, onFinish, commands, autoStart = false }: Props) {
         setSpeechError((prev) => prev ?? failureReason(heard));
       }
     } finally {
-      if (gen === playGen.current) setSpeaking(null);
+      if (gen === playGen.current) endSpeech();
     }
   }
 

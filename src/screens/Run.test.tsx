@@ -9,6 +9,7 @@ import { Run, type RunState } from "./Run";
 
 vi.mock("../tts", () => ({
   webSpeech: { speak: vi.fn(), cancel: vi.fn() },
+  isAndroidLike: () => false,
 }));
 
 function vocabRun(over: Partial<RunState> = {}): RunState {
@@ -37,6 +38,7 @@ function voiceCommands() {
     }),
     stop: vi.fn(() => {
       handler = null;
+      return Promise.resolve();
     }),
     hear: async (command: DictationCommand) => {
       await act(async () => {
@@ -85,6 +87,18 @@ function slowDown() {
 async function advance(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+/**
+ * Let the microphone-release chain settle before checking that speech began.
+ * Play now waits for `stop()` so the speaker cannot start while capture is
+ * still winding down; that is one more promise than the old synchronous path.
+ */
+async function releaseMicrophone() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
   });
 }
 
@@ -277,6 +291,48 @@ describe("Run", () => {
     );
   });
 
+  it("does not open the microphone behind the first play", async () => {
+    vi.useFakeTimers();
+    const commands = voiceCommands();
+    render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} autoStart />);
+    await releaseMicrophone();
+
+    expect(webSpeech.speak).toHaveBeenCalledTimes(1);
+    expect(commands.start).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishPlay?.();
+      finishPlay = null;
+      await Promise.resolve();
+    });
+
+    // Only after the Voice is quiet may the listener take the microphone.
+    expect(commands.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the microphone to be released before it speaks", async () => {
+    vi.useFakeTimers();
+    let releaseStop!: () => void;
+    const stop = new Promise<void>((resolve) => {
+      releaseStop = resolve;
+    });
+    const commands = {
+      start: vi.fn(() => Promise.resolve()),
+      stop: vi.fn(() => stop),
+    };
+    render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} autoStart />);
+
+    expect(webSpeech.speak).not.toHaveBeenCalled();
+
+    await act(async () => {
+      releaseStop();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(webSpeech.speak).toHaveBeenCalledWith("圖書館", expect.anything());
+  });
+
   it("plays the first Chunk once when the Run opens, without turning on auto-play", async () => {
     vi.useFakeTimers();
     render(<Run run={vocabRun()} onFinish={() => {}} autoStart />);
@@ -300,6 +356,7 @@ describe("Run", () => {
     vi.useFakeTimers();
     const commands = voiceCommands();
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} autoStart />);
+    await releaseMicrophone();
 
     expect(webSpeech.speak).toHaveBeenNthCalledWith(1, "圖書館", expect.anything());
 
@@ -332,6 +389,7 @@ describe("Run", () => {
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
 
     fireEvent.click(screen.getByRole("button", { name: "auto" }));
+    await releaseMicrophone();
     expect(webSpeech.speak).toHaveBeenNthCalledWith(1, "圖書館", expect.anything());
 
     await act(async () => {
@@ -351,6 +409,7 @@ describe("Run", () => {
     vi.useFakeTimers();
     const commands = voiceCommands();
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} autoStart />);
+    await releaseMicrophone();
 
     expect(webSpeech.speak).toHaveBeenNthCalledWith(1, "圖書館", expect.anything());
 
@@ -383,6 +442,7 @@ describe("Run", () => {
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
 
     fireEvent.click(screen.getByRole("button", { name: "auto" }));
+    await releaseMicrophone();
     expect(webSpeech.speak).toHaveBeenNthCalledWith(1, "圖書館", expect.anything());
 
     await act(async () => {
@@ -443,7 +503,7 @@ describe("Run", () => {
             ready = resolve;
           }),
       ),
-      stop: vi.fn(),
+      stop: vi.fn(() => Promise.resolve()),
     };
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
 
@@ -506,7 +566,7 @@ describe("Run", () => {
         .fn()
         .mockRejectedValueOnce(new Error("microphone permission is blocked"))
         .mockResolvedValue(undefined),
-      stop: vi.fn(),
+      stop: vi.fn(() => Promise.resolve()),
     };
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
 
@@ -525,7 +585,7 @@ describe("Run", () => {
       start: vi
         .fn()
         .mockRejectedValue(new UnavailableCommandError("microphones need HTTPS or localhost")),
-      stop: vi.fn(),
+      stop: vi.fn(() => Promise.resolve()),
     };
     render(<Run run={vocabRun()} onFinish={() => {}} commands={commands} />);
 
@@ -540,6 +600,7 @@ describe("Run", () => {
     render(<Run run={vocabRun()} onFinish={onFinish} commands={commands} />);
 
     fireEvent.click(screen.getByRole("button", { name: "auto" }));
+    await releaseMicrophone();
     await act(async () => {
       finishPlay?.();
       finishPlay = null;
