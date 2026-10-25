@@ -9,8 +9,9 @@ import {
   summarise,
   weaknesses,
   type ItemProgress,
+  type WeaknessGroup,
 } from "../domain/progress";
-import { languageById, type Run, type SetupFill } from "../domain/types";
+import { languageById, type LanguageId, type Run, type SetupFill } from "../domain/types";
 import { clearRuns, deleteRun, listAllRuns } from "../storage/db";
 
 /**
@@ -53,6 +54,14 @@ function askingAboutRun(asking: Confirming, id: string): boolean {
   return asking?.kind === "run" && asking.id === id;
 }
 
+/**
+ * What the last copy attempt did, and to which Language's material.
+ *
+ * Every group of Weaknesses has its own Copy button, so the note has to say
+ * which one was used: "Copied" beside the wrong list would be a lie.
+ */
+type Copy = { language: LanguageId; ok: boolean } | null;
+
 /** The title for a drill over some material. */
 function drillTitle(language: string, count: number): string {
   return `Needs practice — ${language} (${count})`;
@@ -63,6 +72,7 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
   /** Whether the store could not be read at all. */
   const [unreadable, setUnreadable] = useState(false);
   const [confirming, setConfirming] = useState<Confirming>(null);
+  const [copy, setCopy] = useState<Copy>(null);
 
   useEffect(() => {
     void listAllRuns()
@@ -109,6 +119,21 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
       title: drillTitle(languageById(language).label, items.length),
       text: drillText(items),
     });
+  }
+
+  /**
+   * Put the Weaknesses on the clipboard, one per line.
+   *
+   * The same text a Drill is made of, so it can be pasted somewhere else — into
+   * a document, or into another app's Setup.
+   */
+  async function copyItems(group: WeaknessGroup) {
+    try {
+      await navigator.clipboard.writeText(drillText(group.items));
+      setCopy({ language: group.language, ok: true });
+    } catch {
+      setCopy({ language: group.language, ok: false });
+    }
   }
 
   function again(run: Run) {
@@ -166,6 +191,15 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
                   >
                     Drill these {group.items.length}
                   </button>
+                  <button
+                    className="btn"
+                    onClick={() => void copyItems(group)}
+                    // The visible words come first, so the accessible name still
+                    // contains what the button says on screen.
+                    aria-label={`Copy these ${group.items.length} ${languageById(group.language).label} items to the clipboard`}
+                  >
+                    Copy these {group.items.length}
+                  </button>
                   {group.items.length > RANDOM_DRILL_SIZE && (
                     <button
                       className="btn"
@@ -174,6 +208,13 @@ export function History({ onBack, onDrill, onStorageFail }: Props) {
                     >
                       Random {RANDOM_DRILL_SIZE}
                     </button>
+                  )}
+                  {copy?.language === group.language && (
+                    <p className={copy.ok ? "note good" : "note bad"} role="status">
+                      {copy.ok
+                        ? "Copied to the clipboard, one item per line."
+                        : "Copy failed — the browser would not take it."}
+                    </p>
                   )}
                 </div>
               ))}

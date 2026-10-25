@@ -88,8 +88,8 @@ Screen", or host `dist/` on any static host.
    recent answer was not right is listed as a Weakness, grouped by Language,
    with how often it went right, half-right and wrong. A Weakness is cleared
    only by getting it right — a partial answer or a skip leaves it standing,
-   because neither says the material can be done. Drill them all, or draw a
-   random five.
+   because neither says the material can be done. Drill them all, draw a
+   random five, or copy them to the clipboard — one item per line.
 
 **Paragraph** mode splits on sentence boundaries (`。！？` / `.?!`), falling back
 to clause punctuation (`，、；`) for long sentences, capped at 70 characters.

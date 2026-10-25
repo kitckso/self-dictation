@@ -33,9 +33,15 @@ function renderHistory(props: Partial<Parameters<typeof History>[0]> = {}) {
   );
 }
 
+/** A clipboard that records what it was given. */
+function stubClipboard(writeText: (text: string) => Promise<void>) {
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  Reflect.deleteProperty(navigator, "clipboard");
   // clearAllMocks empties the calls but leaves the implementation a test set,
   // so each test has to put the empty list back or it inherits the last one.
   vi.mocked(listAllRuns).mockResolvedValue([]);
@@ -167,6 +173,69 @@ describe("History", () => {
     expect(onDrill).toHaveBeenCalledWith(
       expect.objectContaining({ text: expect.stringContaining("圖書館") }),
     );
+  });
+
+  it("copies the material that needs practice, one item per line", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    stubClipboard(writeText);
+    vi.mocked(listAllRuns).mockResolvedValue([
+      makeRun({
+        chunks: ["圖書館", "醫院"],
+        results: [
+          { index: 0, transcript: "", outcome: "wrong" },
+          { index: 1, transcript: "", outcome: "wrong" },
+        ],
+      }),
+    ]);
+    renderHistory();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Copy these 2/ }));
+
+    expect(writeText).toHaveBeenCalledWith("圖書館\n醫院");
+    expect(await screen.findByText(/copied to the clipboard/i)).toBeTruthy();
+  });
+
+  it("copies only the material of the language that was asked for", async () => {
+    // Each Language's Weaknesses are listed apart, so copying one must not
+    // sweep the other's up with it.
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    stubClipboard(writeText);
+    vi.mocked(listAllRuns).mockResolvedValue([
+      makeRun({
+        id: "r1",
+        language: "yue",
+        chunks: ["圖書館"],
+        results: [{ index: 0, transcript: "", outcome: "wrong" }],
+      }),
+      makeRun({
+        id: "r2",
+        language: "zh",
+        chunks: ["醫院"],
+        results: [{ index: 0, transcript: "", outcome: "wrong" }],
+      }),
+    ]);
+    renderHistory();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Copy these 1 Cantonese items to the clipboard/ }),
+    );
+
+    expect(writeText).toHaveBeenCalledWith("圖書館");
+  });
+
+  it("says so when the browser refuses the clipboard", async () => {
+    stubClipboard(vi.fn().mockRejectedValue(new Error("refused")));
+    vi.mocked(listAllRuns).mockResolvedValue([
+      makeRun({
+        chunks: ["圖書館"],
+        results: [{ index: 0, transcript: "", outcome: "wrong" }],
+      }),
+    ]);
+    renderHistory();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Copy these 1/ }));
+
+    expect(await screen.findByText(/copy failed/i)).toBeTruthy();
   });
 
   it("offers the material of a past Run to be practised again", async () => {
