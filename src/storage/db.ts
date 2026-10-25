@@ -20,6 +20,8 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
+  /** An upgrade this tab cannot start, because another tab has the store open. */
+  let blocked = false;
   const pending = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
@@ -39,8 +41,31 @@ function open(): Promise<IDBDatabase> {
         db.createObjectStore(VOICE_HEADS, { keyPath: "id" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // The upgrade went through after all, but the caller was already told
+      // it could not. Holding the connection open would now block the tab
+      // that caused the wait, so let it go.
+      if (blocked) {
+        db.close();
+        return;
+      }
+      // Another tab wants a newer version. It cannot have one while this
+      // connection is open, so close it and let the next read open a fresh
+      // one rather than making the other tab wait for this one to be closed.
+      db.onversionchange = () => {
+        db.close();
+        if (dbPromise === pending) dbPromise = null;
+      };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
+    // Without this the promise simply never settles, and a screen that is
+    // waiting on the store looks like it has frozen.
+    req.onblocked = () => {
+      blocked = true;
+      reject(new Error("the store is being upgraded in another tab"));
+    };
   });
   dbPromise = pending;
   // A failure must not be cached for the life of the page. A store blocked in
@@ -62,8 +87,17 @@ function tx<T>(
     (db) =>
       new Promise<T>((resolve, reject) => {
         const t = db.transaction(store, mode);
+        // A request succeeding only means it was queued. A quota failure or
+        // an abort arrives when the transaction commits, so waiting for
+        // `success` would report a Run as saved that is not there.
+        let result!: T;
+        t.oncomplete = () => resolve(result);
+        t.onerror = () => reject(t.error);
+        t.onabort = () => reject(t.error ?? new Error("the store would not take the write"));
         const req = fn(t.objectStore(store));
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+          result = req.result;
+        };
         req.onerror = () => reject(req.error);
       }),
   );
@@ -114,6 +148,7 @@ export async function clearRuns(): Promise<void> {
     };
     t.oncomplete = () => resolve();
     t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error ?? new Error("the Runs could not be cleared"));
   });
 }
 

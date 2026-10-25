@@ -19,6 +19,7 @@ class FakeRequest<T> {
   onsuccess: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onupgradeneeded: (() => void) | null = null;
+  onblocked: (() => void) | null = null;
 }
 
 class FakeStore {
@@ -96,12 +97,14 @@ class FakeTransaction {
   private settled = false;
   private db: FakeDatabase;
   private names: string[];
+  private mode: IDBTransactionMode;
   /** What each store held when the transaction began, to undo it. */
   private snapshot: Map<string, Map<string, unknown>>;
 
-  constructor(db: FakeDatabase, names: string[]) {
+  constructor(db: FakeDatabase, names: string[], mode: IDBTransactionMode) {
     this.db = db;
     this.names = names;
+    this.mode = mode;
     this.snapshot = new Map(names.map((name) => [name, new Map(db.rows(name))]));
   }
 
@@ -123,6 +126,14 @@ class FakeTransaction {
   settle(): void {
     this.pending--;
     if (this.pending > 0 || this.settled) return;
+    // A write can fail at commit even though every request succeeded: the
+    // store runs out of room once the whole transaction has to be made
+    // durable. That is the failure the caller must hear about, because the
+    // request-level success was not the last word.
+    if (this.db.failCommit && this.mode !== "readonly") {
+      this.fail(new Error("the store is full"));
+      return;
+    }
     this.settled = true;
     queueMicrotask(() => this.oncomplete?.());
   }
@@ -150,6 +161,10 @@ class FakeDatabase {
   stores = new Map<string, Map<string, unknown>>();
   /** Store names whose writes should fail. */
   failWritesIn = new Set<string>();
+  /** Whether a write should be refused once it is time to commit. */
+  failCommit = false;
+  closed = false;
+  onversionchange: (() => void) | null = null;
 
   objectStoreNames = {
     contains: (name: string) => this.stores.has(name),
@@ -158,6 +173,10 @@ class FakeDatabase {
   createObjectStore(name: string): { createIndex: () => void } {
     this.stores.set(name, new Map());
     return { createIndex: () => {} };
+  }
+
+  close(): void {
+    this.closed = true;
   }
 
   rows(name: string): Map<string, unknown> {
@@ -169,14 +188,16 @@ class FakeDatabase {
     return rows;
   }
 
-  transaction(names: string | string[]): FakeTransaction {
+  transaction(names: string | string[], mode: IDBTransactionMode = "readonly"): FakeTransaction {
     const list = Array.isArray(names) ? names : [names];
-    return new FakeTransaction(this, list);
+    return new FakeTransaction(this, list, mode);
   }
 }
 
 /** Whether the next open should fail, and how many opens were asked for. */
 let openFails = false;
+/** Whether the next open should be blocked by another tab's connection. */
+let openBlocks = false;
 let openCalls = 0;
 /** The database the fake handed out last, so a test can make a store fail. */
 let lastDb: FakeDatabase | null = null;
@@ -191,6 +212,12 @@ function installIndexedDb(): void {
           if (openFails) {
             req.error = new Error("blocked");
             req.onerror?.();
+            return;
+          }
+          if (openBlocks) {
+            // The upgrade is waiting for another tab to let go. The request
+            // stays unfinished, exactly as a real blocked open does.
+            req.onblocked?.();
             return;
           }
           const db = new FakeDatabase();
@@ -255,7 +282,9 @@ function makeHead(over: Partial<VoiceHead> = {}): VoiceHead {
 
 beforeEach(() => {
   openFails = false;
+  openBlocks = false;
   openCalls = 0;
+  lastDb = null;
   installIndexedDb();
 });
 
@@ -416,12 +445,50 @@ describe("voice commands", () => {
   });
 });
 
+describe("a write the store refuses", () => {
+  it("is reported, even though every request in it succeeded", async () => {
+    const db = await store();
+    await db.listAllRuns();
+    // The request is answered, but the transaction cannot be committed: the
+    // store is full, or it is aborted on the way out.
+    lastDb!.failCommit = true;
+
+    await expect(db.saveRun(makeRun())).rejects.toThrow("the store is full");
+
+    // And nothing was left behind that a later read would find.
+    expect(await db.listAllRuns()).toEqual([]);
+  });
+});
+
 describe("a store that cannot be opened", () => {
   it("says so rather than pretending there is nothing there", async () => {
     const db = await store();
     openFails = true;
 
     await expect(db.listAllRuns()).rejects.toThrow("blocked");
+  });
+
+  it("stops waiting when another tab is holding the store open", async () => {
+    const db = await store();
+    openBlocks = true;
+
+    // A blocked upgrade never finishes on its own. Waiting on it would look
+    // like a screen that has frozen, and the failure has to be one the app
+    // can retry from.
+    await expect(db.listAllRuns()).rejects.toThrow(/upgraded in another tab/);
+  });
+
+  it("lets go when another tab asks for a newer version", async () => {
+    const db = await store();
+    await db.listAllRuns();
+    const opened = lastDb!;
+
+    opened.onversionchange?.();
+
+    expect(opened.closed).toBe(true);
+    // The next read opens a new connection rather than using the closed one.
+    expect(await db.listAllRuns()).toEqual([]);
+    expect(openCalls).toBe(2);
   });
 
   it("is not remembered for the life of the page", async () => {
