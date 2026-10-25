@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { grade, scoreChunk, scoreRun, WRONG_BELOW } from "../domain/grading";
+import { grade, isMistake, scoreChunk, scoreRun, WRONG_BELOW } from "../domain/grading";
 import {
   languageById,
   type ChunkResult,
@@ -16,6 +16,13 @@ interface Props {
   results: ChunkResult[];
   onMark: (index: number, outcome: Outcome | null) => void;
   onAgain: () => void;
+  /**
+   * Start a Run made only of the Chunks that were answered wrong or partly.
+   *
+   * Offered only when there are some, so it is never a button that does
+   * nothing.
+   */
+  onDrillMistakes: () => void;
   onSetup: () => void;
   /** Open the list of past Runs and what still needs practice. */
   onHistory: () => void;
@@ -35,6 +42,9 @@ const OUTCOMES: { id: Outcome; label: string }[] = [
  * A typed Chunk can be marked too. That is an override of the automatic
  * figure, not a second opinion on it, and it is offered behind a button
  * rather than shown always: the machine's grade is right most of the time.
+ *
+ * The Chunks that were not right can be practised again straight away, as a
+ * Run made of only those, without going back through Setup.
  */
 export function Results({
   title,
@@ -44,6 +54,7 @@ export function Results({
   results,
   onMark,
   onAgain,
+  onDrillMistakes,
   onSetup,
   onHistory,
 }: Props) {
@@ -79,6 +90,9 @@ export function Results({
 
   const overall = scoreRun(graded.map((g) => g.score));
   const marked = graded.filter((g) => g.typed || g.score !== null).length;
+  // Counted from the grades already worked out, so the filter cannot disagree
+  // with the red percentages beside it.
+  const missed = graded.filter((g) => isMistake(g.score)).length;
 
   return (
     <div className="pad stack res">
@@ -155,6 +169,11 @@ export function Results({
         })}
       </div>
 
+      {missed > 0 && (
+        <button className="btn" onClick={onDrillMistakes}>
+          Practise the {missed === 1 ? "one" : missed} you missed
+        </button>
+      )}
       <button className="btn" onClick={onAgain}>
         Run it again
       </button>

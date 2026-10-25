@@ -8,7 +8,15 @@ import { Results } from "./Results";
 type Mark = Omit<ChunkResult, "index">;
 
 /** Marks live in the App, so the harness stands in for it. */
-function Harness({ initial, chunks = ["圖書館", "醫院"] }: { initial: Mark[]; chunks?: string[] }) {
+function Harness({
+  initial,
+  chunks = ["圖書館", "醫院"],
+  onDrillMistakes = () => {},
+}: {
+  initial: Mark[];
+  chunks?: string[];
+  onDrillMistakes?: () => void;
+}) {
   const [results, setResults] = useState<ChunkResult[]>(() =>
     initial.map((r, index) => ({ ...r, index })),
   );
@@ -23,6 +31,7 @@ function Harness({ initial, chunks = ["圖書館", "醫院"] }: { initial: Mark[
         setResults((prev) => prev.map((r, j) => (j === i ? { ...r, outcome } : r)))
       }
       onAgain={() => {}}
+      onDrillMistakes={onDrillMistakes}
       onSetup={() => {}}
       onHistory={() => {}}
     />
@@ -135,6 +144,55 @@ describe("Results", () => {
     expect(screen.queryByText(/not kept/i)).toBeNull();
   });
 
+  it("offers another Run of only the Chunks that were not right", () => {
+    let practised = 0;
+    render(
+      <Harness
+        chunks={["圖書館", "醫院", "機場", "銀行", "車站"]}
+        initial={[
+          { transcript: "圖書館", outcome: null },
+          { transcript: "", outcome: "wrong" },
+          { transcript: "", outcome: "partial" },
+          { transcript: "", outcome: "correct" },
+        ]}
+        onDrillMistakes={() => practised++}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /practise the 2 you missed/i }));
+
+    expect(practised).toBe(1);
+  });
+
+  it("says one when only one Chunk was not right", () => {
+    render(
+      <Harness
+        initial={[
+          { transcript: "", outcome: null },
+          { transcript: "", outcome: "partial" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /practise the one you missed/i })).toBeTruthy();
+  });
+
+  it("offers nothing to practise when nothing was answered wrong", () => {
+    render(
+      <Harness
+        initial={[
+          // Right, partly right only as a correct mark, and never attempted.
+          { transcript: "圖書館", outcome: null },
+          { transcript: "", outcome: "correct" },
+          { transcript: "", outcome: null },
+        ]}
+        chunks={["圖書館", "醫院", "機場"]}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /practise/i })).toBeNull();
+  });
+
   it("marks a score right at the same point a Weakness is counted as wrong", () => {
     // Exactly at the threshold is still right. Results and Progress take the
     // figure from one place, but a second copy of it is exactly how they
@@ -146,6 +204,8 @@ describe("Results", () => {
     const score = screen.getByText("80%");
 
     expect(score.getAttribute("style")).toContain("--ok");
+    // And it is not offered as a mistake to practise, either.
+    expect(screen.queryByRole("button", { name: /practise/i })).toBeNull();
   });
 
   it("marks a score wrong below that same point", () => {
@@ -154,5 +214,6 @@ describe("Results", () => {
     const score = screen.getByText("60%");
 
     expect(score.getAttribute("style")).toContain("--bad");
+    expect(screen.getByRole("button", { name: /practise the one you missed/i })).toBeTruthy();
   });
 });

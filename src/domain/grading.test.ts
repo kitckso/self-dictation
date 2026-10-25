@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { CHUNK_CHAR_CAP } from "./chunking";
-import { grade, MAX_GRADE_CHARS, scoreChunk, scoreRun, type DiffPart } from "./grading";
+import {
+  grade,
+  isMistake,
+  MAX_GRADE_CHARS,
+  scoreChunk,
+  scoreRun,
+  WRONG_BELOW,
+  type DiffPart,
+} from "./grading";
 
 /** The parts as "chars:kind" so a diff can be asserted in one line. */
 function shape(parts: DiffPart[]): string {
@@ -156,6 +164,23 @@ describe("scoreChunk", () => {
   it("has no score for a Chunk nobody attempted", () => {
     expect(scoreChunk("abcd", "", null)).toBeNull();
     expect(scoreChunk("abcd", "  ", null)).toBeNull();
+  });
+});
+
+describe("isMistake", () => {
+  it("counts anything answered below the line Results colours red", () => {
+    expect(isMistake(0)).toBe(true);
+    expect(isMistake(0.5)).toBe(true);
+    expect(isMistake(WRONG_BELOW - 0.01)).toBe(true);
+  });
+
+  it("leaves a right answer out, including one exactly at the line", () => {
+    expect(isMistake(WRONG_BELOW)).toBe(false);
+    expect(isMistake(1)).toBe(false);
+  });
+
+  it("leaves an unattempted Chunk out, because a blank line is not a mistake", () => {
+    expect(isMistake(null)).toBe(false);
   });
 });
 

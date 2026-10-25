@@ -223,6 +223,52 @@ describe("App", () => {
     }
   });
 
+  it("practises only the mistakes from the Run that just ended", async () => {
+    render(<App />);
+
+    // Two English Vocabulary Items, answered one right and one not.
+    fireEvent.click(screen.getByRole("button", { name: /English/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Vocabulary" }));
+    fireEvent.change(screen.getByPlaceholderText(/圖書館/), {
+      target: { value: "library\nhospital" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+
+    fireEvent.change(await screen.findByRole("textbox", { name: /answer for chunk 1/i }), {
+      target: { value: "library" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: /answer for chunk 2/i }), {
+      target: { value: "hospit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^end$/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /practise the one you missed/i }));
+
+    // A Run of its own, with only the Chunk that was not right.
+    expect(await screen.findByText("1/1")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: /answer for chunk 1/i })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: /answer for chunk 2/i })).toBeNull();
+  });
+
+  it("practises mistakes that were marked on paper, without going through Setup", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Vocabulary" }));
+    fireEvent.change(screen.getByPlaceholderText(/圖書館/), {
+      target: { value: "圖書館\n醫院" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^end$/i }));
+
+    // One wrong, one half right: both are worth another Run.
+    fireEvent.click(screen.getAllByRole("button", { name: /✗ wrong/ })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: /~ some/ })[1]!);
+
+    fireEvent.click(screen.getByRole("button", { name: /practise the 2 you missed/i }));
+
+    expect(await screen.findByText("1/2")).toBeTruthy();
+  });
+
   it("says so when the browser cannot save, instead of losing the Run quietly", async () => {
     vi.mocked(listCollections).mockRejectedValueOnce(new Error("storage is blocked"));
     render(<App />);

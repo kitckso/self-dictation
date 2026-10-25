@@ -143,6 +143,17 @@ export function scoreChunk(
   return null;
 }
 
+/**
+ * Whether a score is a mistake: answered, but below WRONG_BELOW.
+ *
+ * A Chunk nobody attempted has no score and is not a mistake — a blank line
+ * says nothing about what needs practising. A partial answer is one, because
+ * half right is not right: the same line Progress draws for a Weakness.
+ */
+export function isMistake(score: number | null): boolean {
+  return score !== null && score < WRONG_BELOW;
+}
+
 /** Mean of the attempted Chunks, or null if nothing has been attempted. */
 export function scoreRun(scores: (number | null)[]): number | null {
   const attempted = scores.filter((s): s is number => s !== null);

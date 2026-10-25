@@ -1,4 +1,4 @@
-import { grade, scoreChunk, scoreRun, WRONG_BELOW } from "./grading";
+import { grade, isMistake, scoreChunk, scoreRun, WRONG_BELOW } from "./grading";
 import type { LanguageId, Mode, Outcome, Run } from "./types";
 
 /**
@@ -221,6 +221,24 @@ export function summarise(run: Run): RunSummary {
     score: scoreRun(scores),
     answered: scores.filter((s) => s !== null).length,
   };
+}
+
+/**
+ * The Chunks of a Run that are worth practising again straight away.
+ *
+ * Everything answered below the line Results colours red: a typed answer
+ * Grading called wrong, or a Paper Answer marked partial or wrong. A Chunk
+ * nobody attempted is left out — a blank line says nothing about what needs
+ * practice — and so is one answered right.
+ *
+ * Weaknesses do the same job across Runs; this is the same idea for the Run
+ * that has just ended, before it becomes a record.
+ */
+export function chunksToPractise(run: Pick<Run, "chunks" | "results">): string[] {
+  return run.chunks.filter((chunk, i) => {
+    const result = run.results[i];
+    return isMistake(scoreChunk(chunk, result?.transcript ?? "", result?.outcome ?? null));
+  });
 }
 
 /**

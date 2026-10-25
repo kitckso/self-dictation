@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toChunks } from "./domain/chunking";
-import { hasAnswers } from "./domain/progress";
+import { chunksToPractise, hasAnswers } from "./domain/progress";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "./domain/share";
 import type { Outcome, Run as RunRecord, SetupFill, StartInput } from "./domain/types";
 import { deleteRun, getVoiceProfile, saveRun } from "./storage/db";
@@ -300,6 +300,19 @@ export default function App() {
           onAgain={() =>
             // A second pass is a new Run, so it gets a new start time.
             setScreen({ name: "run", run: { ...screen.run, startedAt: Date.now() } })
+          }
+          onDrillMistakes={() =>
+            // The mistakes are a new Run of their own, like a second pass.
+            // Only the Chunks that were not answered right come along; the
+            // rest of the Passage has already been dealt with.
+            setScreen({
+              name: "run",
+              run: {
+                ...screen.run,
+                chunks: chunksToPractise(screen.record),
+                startedAt: Date.now(),
+              },
+            })
           }
           onSetup={() => goSetup(null)}
           onHistory={() => setScreen({ name: "history" })}

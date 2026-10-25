@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WRONG_BELOW } from "./grading";
 import {
+  chunksToPractise,
   classify,
   drillText,
   groupByLanguage,
@@ -97,6 +98,43 @@ describe("hasAnswers", () => {
     const run = makeRun({ results: results({ index: 0, outcome: null }) });
 
     expect(hasAnswers(run)).toBe(false);
+  });
+});
+
+describe("chunksToPractise", () => {
+  it("takes the Chunks answered wrong, typed or marked", () => {
+    const run = makeRun({
+      chunks: ["圖書館", "醫院", "機場", "銀行", "車站"],
+      results: results(
+        { index: 0, transcript: "圖書饭" },
+        { index: 1, outcome: "wrong" },
+        { index: 2, outcome: "partial" },
+        { index: 3, transcript: "銀行" },
+        { index: 4, transcript: "" },
+      ),
+    });
+
+    // A partial mark is half right, and half right is not right. The blank
+    // Chunk is not a mistake: nothing was attempted, so nothing was missed.
+    expect(chunksToPractise(run)).toEqual(["圖書館", "醫院", "機場"]);
+  });
+
+  it("keeps an answer at the threshold out of the next Run", () => {
+    const run = makeRun({
+      chunks: ["abcde", "abcde", "abcd"],
+      results: results(
+        { index: 0, transcript: "abcd" },
+        { index: 1, outcome: "correct" },
+        { index: 2, transcript: "ab" },
+      ),
+    });
+
+    // Exactly 80% is right, as the score on Results says it is.
+    expect(chunksToPractise(run)).toEqual(["abcd"]);
+  });
+
+  it("has nothing to practise for a Run that was never answered", () => {
+    expect(chunksToPractise(makeRun())).toEqual([]);
   });
 });
 
