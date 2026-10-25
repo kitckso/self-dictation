@@ -573,7 +573,11 @@ export function Run({
                 )}
               </>
             ) : endArmed ? (
-              `Say ${words.stop} again after a second to end the Run.`
+              // The recognizer may have been built from words this component
+              // was never told about, so only name "stop" when both agree.
+              commandWords === "known"
+                ? `Say ${words.stop} again after a second to end the Run.`
+                : "Say your stop word again after a second to end the Run."
             ) : speaking !== null ? (
               "Voice commands are paused while the Voice speaks."
             ) : commandStarting ? (
