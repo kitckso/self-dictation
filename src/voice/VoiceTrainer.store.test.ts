@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VoiceHead } from "./head";
 import type { VoiceProfile } from "./profile";
+import type { ListeningRecognizer } from "./recognizer";
 import type { SampleCollector } from "./trainer";
 import { VoiceTrainer } from "./VoiceTrainer";
 
@@ -48,6 +49,8 @@ const h = vi.hoisted(() => {
     builtIn: recognizer(builtInLabels, 0),
     /** A trained head: it hears the class "stop". */
     trained: recognizer(trainedLabels, 3),
+    /** A head rebuilt from the store, the way a reload builds one. */
+    reloaded: recognizer(trainedLabels, 3),
     setRecognizer: vi.fn(),
   };
 });
@@ -104,10 +107,14 @@ function trainedCollector(): SampleCollector {
 }
 
 /** A trainer that asks for nothing of the browser. */
-function trainerWith(collector: SampleCollector) {
+function trainerWith(
+  collector: SampleCollector,
+  buildRecognizer: (head: VoiceHead) => Promise<ListeningRecognizer> = async () => h.reloaded,
+) {
   return new VoiceTrainer({
     openSession: async () => collector,
     askMicrophone: async () => {},
+    buildRecognizer,
     gapMs: 0,
     liveTestMs: 1,
   });
@@ -234,6 +241,23 @@ describe("saving the commands", () => {
     await trainer.save();
 
     expect(h.setRecognizer).toHaveBeenCalled();
+  });
+
+  it("listens with the saved head rather than with the samples it was trained from", async () => {
+    const collector = trainedCollector();
+    const build = vi.fn(async () => h.reloaded);
+    const trainer = trainerWith(collector, build);
+    await trainAll(trainer);
+
+    await trainer.save();
+
+    // The samples are thrown away when the dialog closes, and the recognizer
+    // that belongs to them goes deaf with them — the library forgets its word
+    // labels as it clears them. What a Run listens with has to be a
+    // recognizer built from the saved head, as a reload would build it.
+    expect(build).toHaveBeenCalledWith(expect.objectContaining({ baseModelId: "18w-v1" }));
+    expect(h.setRecognizer).toHaveBeenCalledWith(h.reloaded);
+    expect(h.setRecognizer).not.toHaveBeenCalledWith(h.trained);
   });
 });
 

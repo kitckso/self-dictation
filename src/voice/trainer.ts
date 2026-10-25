@@ -65,7 +65,13 @@ export interface SampleCollector {
   head(id: string): Promise<VoiceHead>;
   /** The recognizer to listen with from now on. */
   recognizer(): ListeningRecognizer;
-  /** Throw the samples away. */
+  /**
+   * Throw the samples away.
+   *
+   * A recognizer taken from here must not outlive this: the library forgets
+   * the word labels along with the samples, and its streaming recognition
+   * then fails on every frame.
+   */
   dispose(): void;
 }
 
@@ -278,7 +284,13 @@ class SampleCollectorImpl implements SampleCollector {
     return toListeningRecognizer(this.live());
   }
 
-  /** Throw the samples away. */
+  /**
+   * Throw the samples away.
+   *
+   * `clearExamples()` also sets the library's word list to null, so anything
+   * still holding this recognizer for streaming is left deaf: it fails on
+   * every frame it hears. Nothing may keep one past this point.
+   */
   dispose(): void {
     const transfer = this.transfer;
     this.transfer = null;

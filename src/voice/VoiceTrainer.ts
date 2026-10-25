@@ -8,6 +8,7 @@ import {
 } from "../storage/db";
 import { bestLabel, COMMAND_CONFIDENCE } from "./commands";
 import { describeCommandError } from "./errors";
+import type { VoiceHead } from "./head";
 import { ensureMicrophone, RAW_MICROPHONE } from "./microphone";
 import {
   defaultPhrases,
@@ -59,6 +60,13 @@ export interface VoiceTrainerOptions {
    * browser, because a refusal is not what the test is about.
    */
   askMicrophone?: () => Promise<void>;
+  /**
+   * How to build the recognizer a Run will listen with, from a trained head.
+   *
+   * The real one rebuilds the head onto the base model, which is what a
+   * reload does. A test hands over a stand-in instead.
+   */
+  buildRecognizer?: (head: VoiceHead) => Promise<ListeningRecognizer>;
   /**
    * The pause between two samples of a recording that carries on.
    *
@@ -130,6 +138,14 @@ export class VoiceTrainer {
   private readonly openSession: () => Promise<SampleCollector>;
   /** How to ask for the microphone. */
   private readonly askMicrophone: () => Promise<void>;
+  /**
+   * How to build the recognizer a Run will listen with.
+   *
+   * It is built from the saved head rather than from the samples, because the
+   * samples are thrown away with the dialog and the recognizer that belongs to
+   * them goes with them.
+   */
+  private readonly buildRecognizer: (head: VoiceHead) => Promise<ListeningRecognizer>;
   /** The pause between two samples of a recording that carries on. */
   private readonly gapMs: number;
   /** How long the live test listens for. */
@@ -145,6 +161,7 @@ export class VoiceTrainer {
   constructor({
     openSession,
     askMicrophone,
+    buildRecognizer,
     gapMs = RECORD_GAP_MS,
     liveTestMs = LIVE_TEST_MS,
   }: VoiceTrainerOptions = {}) {
@@ -157,6 +174,12 @@ export class VoiceTrainer {
         return await openSampleCollector({ audioTrackConstraints: RAW_MICROPHONE });
       });
     this.askMicrophone = askMicrophone ?? ensureMicrophone;
+    this.buildRecognizer =
+      buildRecognizer ??
+      (async (head) => {
+        const { recognizerFromHead } = await import("./trainer");
+        return await recognizerFromHead(head);
+      });
     this.gapMs = gapMs;
     this.liveTestMs = liveTestMs;
     this.state = {
@@ -471,10 +494,18 @@ export class VoiceTrainer {
         updatedAt: now,
         trainedAt: now,
       };
+      // The Run listens with a recognizer built from the head that is about to
+      // be kept, the same way a reload builds one, rather than with the one
+      // that belongs to the samples. The samples are thrown away when the
+      // dialog closes, and the library's way of throwing them away also
+      // forgets the word labels its recognizer reads — which left a fresh Run
+      // deaf until the page was reloaded. Building it here is also a check
+      // that the head is usable before anything is written.
+      const recognizer = enabled ? await this.buildRecognizer(head) : null;
       await saveVoiceProfile(profile, head);
-      if (enabled) {
+      if (recognizer) {
         // The head is in use from now on, without waiting for a reload.
-        setRecognizer(session.recognizer());
+        setRecognizer(recognizer);
       } else {
         // The commands are saved but switched off, so the built-in words are
         // still what a Run listens for.
