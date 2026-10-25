@@ -24,7 +24,15 @@ type Copy = "idle" | "copied" | "failed";
 export function Share({ setup, onClose }: Props) {
   const [link, setLink] = useState<string | null>(null);
   const [copy, setCopy] = useState<Copy>("idle");
+  const [shareFailed, setShareFailed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  /**
+   * Whether this browser can hand the link to the system share sheet.
+   *
+   * Checked per render rather than once at module load, so a test — or a
+   * polyfill that arrives late — sees the browser as it is now.
+   */
+  const canShare = typeof navigator.share === "function";
 
   useEffect(() => {
     const el = dialog.current;
@@ -56,11 +64,29 @@ export function Share({ setup, onClose }: Props) {
   const code = useMemo(() => (scannable ? qrPath(qrCode(content)) : null), [scannable, content]);
 
   async function copyLink() {
+    setShareFailed(false);
     try {
       await navigator.clipboard.writeText(content);
       setCopy("copied");
     } catch {
       setCopy("failed");
+    }
+  }
+
+  /**
+   * Hand the link to whatever the device uses for sharing.
+   *
+   * This is the natural thing on a phone: one tap, then the app the person
+   * already sends things with, instead of copying a link and finding it again
+   * in another app. Closing the sheet is a decision, not an error.
+   */
+  async function shareLink() {
+    setShareFailed(false);
+    try {
+      await navigator.share({ title: setup.title || "Self Dictation", url: content });
+    } catch (error) {
+      if (error instanceof Object && "name" in error && error.name === "AbortError") return;
+      setShareFailed(true);
     }
   }
 
@@ -121,8 +147,13 @@ export function Share({ setup, onClose }: Props) {
       )}
 
       <div className="share-actions">
+        {shareable && canShare && (
+          <button className="btn primary" onClick={() => void shareLink()}>
+            Share…
+          </button>
+        )}
         {shareable && (
-          <button className="btn primary" onClick={() => void copyLink()}>
+          <button className={canShare ? "btn" : "btn primary"} onClick={() => void copyLink()}>
             Copy link
           </button>
         )}
@@ -134,6 +165,9 @@ export function Share({ setup, onClose }: Props) {
       {copy === "copied" && <p className="note good">Copied to the clipboard.</p>}
       {copy === "failed" && (
         <p className="note bad">Copy failed — the link above can be selected by hand.</p>
+      )}
+      {shareFailed && (
+        <p className="note bad">Could not open the share sheet — copy the link instead.</p>
       )}
     </dialog>
   );

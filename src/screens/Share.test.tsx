@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { decodeSetup, payloadFromHash, type SharedSetup } from "../domain/share";
 import { DENSE_CONTENT_CHARS } from "../lib/qr";
@@ -23,6 +23,10 @@ function stubClipboard(writeText: (text: string) => Promise<void>) {
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 }
 
+function stubShare(share: (data: ShareData) => Promise<void>) {
+  Object.defineProperty(navigator, "share", { value: share, configurable: true });
+}
+
 /** The link the panel put in front of the user, or null when it drew none. */
 function shownLink(): string | null {
   const field = screen.queryByDisplayValue(/self-dictation\.netlify\.app\/#d=/);
@@ -42,6 +46,7 @@ function payloadOf(link: string): string | null {
 afterEach(() => {
   cleanup();
   Reflect.deleteProperty(navigator, "clipboard");
+  Reflect.deleteProperty(navigator, "share");
 });
 
 describe("Share", () => {
@@ -93,6 +98,48 @@ describe("Share", () => {
     fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
 
     expect(await screen.findByText(/copy failed/i)).toBeTruthy();
+  });
+
+  it("hands the link to the system share sheet when there is one", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    stubShare(share);
+    render(<Share setup={setup} onClose={() => {}} />);
+    const link = await linkShown();
+
+    fireEvent.click(screen.getByRole("button", { name: /^share/i }));
+
+    expect(share).toHaveBeenCalledWith({ title: "晨早新聞", url: link });
+  });
+
+  it("does not call closing the share sheet a failure", async () => {
+    const cancelled = Object.assign(new Error("cancelled"), { name: "AbortError" });
+    const share = vi.fn().mockRejectedValue(cancelled);
+    stubShare(share);
+    render(<Share setup={setup} onClose={() => {}} />);
+    await linkShown();
+
+    fireEvent.click(screen.getByRole("button", { name: /^share/i }));
+
+    await waitFor(() => expect(share).toHaveBeenCalled());
+    expect(screen.queryByText(/share sheet/i)).toBeNull();
+  });
+
+  it("says so when the share sheet cannot be opened", async () => {
+    stubShare(vi.fn().mockRejectedValue(new Error("no share targets")));
+    render(<Share setup={setup} onClose={() => {}} />);
+    await linkShown();
+
+    fireEvent.click(screen.getByRole("button", { name: /^share/i }));
+
+    expect(await screen.findByText(/could not open the share sheet/i)).toBeTruthy();
+  });
+
+  it("offers only copying when the browser has no share sheet", async () => {
+    render(<Share setup={setup} onClose={() => {}} />);
+    await linkShown();
+
+    expect(screen.queryByRole("button", { name: /^share/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /copy link/i })).toBeTruthy();
   });
 
   it("warns when the code it would draw is too dense to scan", async () => {
