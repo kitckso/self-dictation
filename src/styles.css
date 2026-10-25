@@ -1,4 +1,7 @@
 :root {
+  /* Both schemes, so form controls, scrollbars and the browser's own chrome
+     follow the palette instead of staying dark on a light page. */
+  color-scheme: dark light;
   --bg: #101014;
   --bg2: #17171d;
   --bg3: #1f1f27;
@@ -6,9 +9,46 @@
   --fg: #ececf1;
   --dim: #8b8b99;
   --accent: #6ea8fe;
+  --on-accent: #06060a;
   --ok: #4ec9a8;
   --bad: #ff7b72;
   --warn: #e3b341;
+  /* The floating bars are glass over the page, so each palette gets its own. */
+  --glass: #000000d8;
+  --miss-bg: #3a1c1a;
+  --extra-bg: #3a3220;
+  --scroll-thumb: rgba(236, 236, 241, 0.18);
+  --scroll-thumb-hover: rgba(236, 236, 241, 0.34);
+  --scroll-thumb-active: rgba(236, 236, 241, 0.46);
+  /* The installed iOS status bar is white-on-transparent, so the strip behind
+     it stays dark in both palettes. */
+  --statusbar: #101014;
+}
+
+/* Daylight and desk use: the same layout with the contrast reversed. The
+   accent darkens so white text on it still reads, and the diff colours darken
+   so they are not pale marks on a pale ground. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #f6f6f9;
+    --bg2: #ffffff;
+    --bg3: #ececf2;
+    --line: #d8d8e2;
+    --fg: #16161d;
+    --dim: #5e5e70;
+    --accent: #2f6fd0;
+    --on-accent: #ffffff;
+    --ok: #157a5b;
+    --bad: #c22a22;
+    --warn: #8a6100;
+    --glass: #ffffffe8;
+    --miss-bg: #ffe4e1;
+    --extra-bg: #fff0c2;
+    --scroll-thumb: rgba(22, 22, 29, 0.18);
+    --scroll-thumb-hover: rgba(22, 22, 29, 0.32);
+    --scroll-thumb-active: rgba(22, 22, 29, 0.44);
+  }
 }
 
 * {
@@ -22,7 +62,7 @@
    seen when they are being used. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(236, 236, 241, 0.22) transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 ::-webkit-scrollbar {
   width: 10px;
@@ -33,24 +73,22 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(236, 236, 241, 0.18);
+  background: var(--scroll-thumb);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(236, 236, 241, 0.34);
+  background: var(--scroll-thumb-hover);
 }
 ::-webkit-scrollbar-thumb:active {
-  background: rgba(236, 236, 241, 0.46);
+  background: var(--scroll-thumb-active);
 }
 html,
 body {
   margin: 0;
   padding: 0;
   background: var(--bg);
-}
-body {
   color: var(--fg);
   font:
     16px/1.55 -apple-system,
@@ -90,6 +128,19 @@ h2 {
      (black-translucent + viewport-fit=cover), so the first row needs to start
      below it rather than under the clock. */
   padding-top: env(safe-area-inset-top);
+}
+/* The padding above keeps content clear of the clock; this keeps the strip
+   behind it dark, because iOS draws white status icons there in both palettes. */
+.app::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--statusbar);
+  pointer-events: none;
+  z-index: 20;
 }
 
 .scroll,
@@ -176,7 +227,7 @@ h2 {
 }
 .seg button[aria-pressed="true"] {
   background: var(--accent);
-  color: #06060a;
+  color: var(--on-accent);
   font-weight: 650;
 }
 .seg button > span {
@@ -242,7 +293,7 @@ h2 {
 }
 .btn.primary {
   background: var(--accent);
-  color: #06060a;
+  color: var(--on-accent);
   border-color: transparent;
   font-weight: 650;
 }
@@ -273,7 +324,7 @@ h2 {
   padding: 10px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: #000000d8;
+  background: var(--glass);
   backdrop-filter: blur(10px);
 }
 .setup-foot .note {
@@ -381,7 +432,7 @@ h2 {
 }
 .slot.now .num {
   background: var(--accent);
-  color: #06060a;
+  color: var(--on-accent);
 }
 .mini {
   padding: 3px 8px;
@@ -432,13 +483,13 @@ h2 {
 }
 .tok.miss {
   color: var(--bad);
-  background: #3a1c1a;
+  background: var(--miss-bg);
   text-decoration: underline wavy var(--bad) 1px;
   text-underline-offset: 3px;
 }
 .tok.extra {
   color: var(--warn);
-  background: #3a3220;
+  background: var(--extra-bg);
 }
 
 .mark-row {
@@ -477,7 +528,7 @@ h2 {
   display: flex;
   gap: 5px;
   align-items: center;
-  background: #000000d8;
+  background: var(--glass);
   backdrop-filter: blur(10px);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -495,13 +546,13 @@ h2 {
 }
 .rail-btn.on {
   background: var(--accent);
-  color: #06060a;
+  color: var(--on-accent);
   border-color: transparent;
   font-weight: 650;
 }
 .rail-btn.go {
   background: var(--accent);
-  color: #06060a;
+  color: var(--on-accent);
   border-color: transparent;
   font-weight: 650;
 }
@@ -511,7 +562,7 @@ h2 {
   border-radius: 999px;
   font-size: 13px;
   background: var(--accent);
-  color: #06060a;
+  color: var(--on-accent);
   font-weight: 650;
 }
 
@@ -519,7 +570,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #000000d8;
+  background: var(--glass);
   backdrop-filter: blur(10px);
   border: 1px solid var(--line);
   border-radius: 16px;
