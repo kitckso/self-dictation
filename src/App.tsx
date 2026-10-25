@@ -70,6 +70,15 @@ export default function App() {
    * model.
    */
   const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null);
+  /**
+   * Whether the words for the voice commands are known.
+   *
+   * Reading the profile can fail while the recognizer — which reads the store
+   * itself — still uses the person's own commands. Naming the built-in words
+   * in that case would describe the wrong ones, so the Run says only that the
+   * words could not be read.
+   */
+  const [voiceWords, setVoiceWords] = useState<"pending" | "known" | "unknown">("pending");
   const commandPhrases = commandPhrasesOf(voiceProfile);
 
   /**
@@ -81,14 +90,17 @@ export default function App() {
   /**
    * Read what the voice commands are called, so a Run can say so.
    *
-   * A store that cannot be read is not worth shouting about here: the app
-   * already says so when it cannot save anything, and the built-in English
-   * words are a perfectly good fallback for this one hint.
+   * The profile is only a hint; the recognizer reads the store itself when the
+   * microphone starts. A failed read therefore has to leave the words unsaid
+   * rather than claim the built-in ones are in use.
    */
   const readVoiceProfile = useCallback(() => {
     void getVoiceProfile()
-      .then(setVoiceProfile)
-      .catch(() => setVoiceProfile(null));
+      .then((profile) => {
+        setVoiceProfile(profile);
+        setVoiceWords("known");
+      })
+      .catch(() => setVoiceWords("unknown"));
   }, []);
 
   useEffect(readVoiceProfile, [readVoiceProfile]);
@@ -273,6 +285,7 @@ export default function App() {
           onFinish={(transcripts) => finish(screen.run, transcripts)}
           commands={canTryVoiceCommands() ? voiceCommands : undefined}
           commandPhrases={commandPhrases ?? undefined}
+          commandWords={voiceWords}
           autoStart
         />
       )}

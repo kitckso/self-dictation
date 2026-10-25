@@ -538,6 +538,22 @@ describe("Run", () => {
     expect(screen.queryByText(/say .go. or .yes./i)).toBeNull();
   });
 
+  it("does not name words it could not read", async () => {
+    render(
+      <Run
+        run={vocabRun()}
+        onFinish={() => {}}
+        commands={voiceCommands()}
+        commandWords="unknown"
+      />,
+    );
+
+    expect(await screen.findByText(/words could not be read from this browser/i)).toBeTruthy();
+    // Naming "go" and "no" here would claim the built-in model is in use, but
+    // the recognizer may still be listening for the person's own commands.
+    expect(screen.queryByText(/say .go. or .yes./i)).toBeNull();
+  });
+
   it("asks for the person's own stop word again to end the Run", async () => {
     const commands = voiceCommands();
     render(

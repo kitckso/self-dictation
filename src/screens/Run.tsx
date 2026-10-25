@@ -44,6 +44,14 @@ interface Props {
    * unless a trained head is in use. The hint tells the truth either way.
    */
   commandPhrases?: VoicePhrases;
+  /**
+   * Whether the words to name are known.
+   *
+   * A profile read that failed must not be reported as the built-in words:
+   * the recognizer reads the store itself and may still hear the person's own
+   * commands, so naming "go" and "no" could be simply wrong.
+   */
+  commandWords?: "pending" | "known" | "unknown";
   /** Play the first Chunk once as soon as the Run opens. */
   autoStart?: boolean;
 }
@@ -96,7 +104,14 @@ function failureReason(result: "cut-off" | "failed"): string {
  * Nothing about the material appears here — no Reference, no score. Listen,
  * write it down, and the whole Passage is revealed at once on Results.
  */
-export function Run({ run, onFinish, commands, commandPhrases, autoStart = false }: Props) {
+export function Run({
+  run,
+  onFinish,
+  commands,
+  commandPhrases,
+  commandWords = "known",
+  autoStart = false,
+}: Props) {
   const [transcripts, setTranscripts] = useState<Record<number, string>>({});
   const [cursor, setCursor] = useState(0);
   const [speaking, setSpeaking] = useState<number | null>(null);
@@ -150,9 +165,13 @@ export function Run({ run, onFinish, commands, commandPhrases, autoStart = false
    * everyone else hears the built-in English ones. The built-in model accepts
    * "go" or "yes" for the next chunk, so both are offered.
    */
-  const nextWord = commandPhrases ? `“${commandPhrases.next}”` : "“go” or “yes”";
-  const repeatWord = commandPhrases ? `“${commandPhrases.repeat}”` : "“no”";
-  const stopWord = commandPhrases ? `“${commandPhrases.stop}”` : "“stop”";
+  const words = commandPhrases
+    ? {
+        next: `“${commandPhrases.next}”`,
+        repeat: `“${commandPhrases.repeat}”`,
+        stop: `“${commandPhrases.stop}”`,
+      }
+    : { next: "“go” or “yes”", repeat: "“no”", stop: "“stop”" };
 
   /**
    * Whoever bumps this owns the speaker. A tap, a stop, or the effect being
@@ -554,13 +573,20 @@ export function Run({ run, onFinish, commands, commandPhrases, autoStart = false
                 )}
               </>
             ) : endArmed ? (
-              `Say ${stopWord} again after a second to end the Run.`
+              `Say ${words.stop} again after a second to end the Run.`
             ) : speaking !== null ? (
               "Voice commands are paused while the Voice speaks."
             ) : commandStarting ? (
               "Starting voice commands…"
+            ) : commandWords === "pending" ? (
+              "Voice commands are on. Reading the words from this browser…"
+            ) : commandWords === "unknown" ? (
+              // The recognizer reads the store itself and may have the
+              // person's own commands, so naming the built-in words here
+              // could be a lie about what is actually being listened for.
+              "Voice commands are on, but the words could not be read from this browser."
             ) : (
-              `Voice commands: say ${nextWord} to play the next chunk, ${repeatWord} to hear this one again; ${stopWord} to stop, then again to end.`
+              `Voice commands: say ${words.next} to play the next chunk, ${words.repeat} to hear this one again; ${words.stop} to stop, then again to end.`
             )}
           </p>
         )}
