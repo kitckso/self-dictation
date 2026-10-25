@@ -254,4 +254,18 @@ describe("the voice commands card", () => {
     });
     expect(screen.getByRole("dialog", { name: /voice commands/i })).toBeTruthy();
   });
+
+  it("says so when the dialog cannot be opened, rather than doing nothing", async () => {
+    vi.mocked(voiceTrainer).mockRejectedValueOnce(new Error("the model is not here"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderSetup();
+
+    fireEvent.click(screen.getByRole("button", { name: /teach it your own words/i }));
+
+    // The tap did something, and the person is told what.
+    expect(await screen.findByText(/could not be opened on this device/i)).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: /voice commands/i })).toBeNull();
+
+    logged.mockRestore();
+  });
 });

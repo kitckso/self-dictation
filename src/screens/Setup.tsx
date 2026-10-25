@@ -90,6 +90,8 @@ export function Setup({
   const [sharing, setSharing] = useState(false);
   /** Whether the dialog for teaching the app the person's own commands is open. */
   const [voiceOpen, setVoiceOpen] = useState(false);
+  /** Why that dialog could not be opened, if it could not. */
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   /**
    * The seam behind that dialog, once it has been fetched.
    *
@@ -119,12 +121,16 @@ export function Setup({
    * it stays out of the app until somebody asks for it.
    */
   async function openVoice() {
+    setVoiceError(null);
     setVoiceOpen(true);
     try {
       setTrainer(await voiceTrainer());
     } catch (error) {
       console.error("Voice commands could not be opened", error);
       setVoiceOpen(false);
+      // Closing the dialog and saying nothing leaves the person looking at an
+      // unchanged screen, as if their tap had been ignored.
+      setVoiceError("Voice commands could not be opened on this device. Try again.");
     }
   }
 
@@ -395,6 +401,7 @@ export function Setup({
             <span className={voiceChipClass}>{voiceChip}</span>
           </div>
           <p className="note">{voiceDetail}</p>
+          {voiceError && <p className="note bad">{voiceError}</p>}
           <div className="voice-card-actions">
             <button className="rowbtn" onClick={() => void openVoice()}>
               {voiceProfile ? "Change the words" : "Teach it your own words"}
