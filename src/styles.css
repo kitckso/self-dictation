@@ -86,6 +86,10 @@ h2 {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  /* The page draws under the status bar in an installed iOS app
+     (black-translucent + viewport-fit=cover), so the first row needs to start
+     below it rather than under the clock. */
+  padding-top: env(safe-area-inset-top);
 }
 
 .scroll,
