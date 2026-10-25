@@ -133,10 +133,18 @@ describe("scoreChunk", () => {
     expect(scoreChunk("abcd", "abce", null)).toBeCloseTo(0.75);
   });
 
-  it("prefers what was typed over a self-mark left over from paper", () => {
-    // Switching from paper to typing mid-Run can leave a mark behind; the
-    // Transcript is the stronger evidence and must win.
-    expect(scoreChunk("abcd", "abcd", "wrong")).toBe(1);
+  it("prefers what was typed when there is no mark", () => {
+    expect(scoreChunk("abcd", "abcd", null)).toBe(1);
+  });
+
+  it("lets a mark correct an automatic grade", () => {
+    // A typed Chunk is marked only from Results, as a correction to the
+    // character comparison — a rendering the grader cannot know about, or a
+    // transcription that is right despite looking different. Without this,
+    // an unfair figure would also become a lasting Weakness.
+    expect(scoreChunk("abcd", "abce", "correct")).toBe(1);
+    expect(scoreChunk("abcd", "abce", "partial")).toBe(0.5);
+    expect(scoreChunk("abcd", "abce", "wrong")).toBe(0);
   });
 
   it("falls back to the self-mark when nothing was typed", () => {

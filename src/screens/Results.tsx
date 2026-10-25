@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { grade, scoreChunk, scoreRun, WRONG_BELOW } from "../domain/grading";
 import {
   languageById,
@@ -31,6 +31,10 @@ const OUTCOMES: { id: Outcome; label: string }[] = [
  * The end of a Run: every Reference appears at once, beside what was typed and
  * a self-mark for what was written on paper. The score is the mean of the two,
  * so it keeps changing while marking is still in progress.
+ *
+ * A typed Chunk can be marked too. That is an override of the automatic
+ * figure, not a second opinion on it, and it is offered behind a button
+ * rather than shown always: the machine's grade is right most of the time.
  */
 export function Results({
   title,
@@ -43,6 +47,8 @@ export function Results({
   onSetup,
   onHistory,
 }: Props) {
+  /** The typed Chunks whose mark row the person has asked to see. */
+  const [marking, setMarking] = useState<ReadonlySet<number>>(new Set());
   /**
    * Graded once per change, not once per score and once per diff.
    *
@@ -60,7 +66,13 @@ export function Results({
           return { typed: false, score: scoreChunk(chunk, "", r?.outcome ?? null), parts: null };
         }
         const g = grade(chunk, transcript);
-        return { typed: true, score: g.accuracy, parts: g.parts };
+        // A mark on a typed Chunk is a deliberate correction, so the score
+        // has to take it rather than the character comparison.
+        return {
+          typed: true,
+          score: scoreChunk(chunk, transcript, r?.outcome ?? null),
+          parts: g.parts,
+        };
       }),
     [chunks, results],
   );
@@ -92,10 +104,15 @@ export function Results({
         {chunks.map((chunk, i) => {
           const g = graded[i] ?? { typed: false, score: null, parts: null };
           const r = results[i];
+          const outcome = r?.outcome ?? null;
+          // A typed Chunk is graded automatically, so its marks stay folded
+          // away until asked for — or until one has been set and must show.
+          const showMarks = !g.typed || outcome !== null || marking.has(i);
           return (
             <div className="res-item" key={i}>
               <p className="note" style={{ marginBottom: 6 }}>
                 {i + 1} · {g.typed ? `${Math.round((g.score ?? 0) * 100)}% typed` : "on paper"}
+                {g.typed && outcome !== null && " · marked by you"}
               </p>
               <p className="ref">
                 {g.parts
@@ -106,16 +123,27 @@ export function Results({
                     ))
                   : chunk}
               </p>
-              {!g.typed && (
+              {g.typed && !showMarks && (
                 <div className="mark-row">
+                  <button
+                    className="mini"
+                    onClick={() => setMarking((open) => new Set(open).add(i))}
+                  >
+                    Mark it yourself
+                  </button>
+                </div>
+              )}
+              {showMarks && (
+                <div className="mark-row">
+                  {g.typed && <span className="note">Your mark:</span>}
                   {OUTCOMES.map((o) => (
                     <button
                       key={o.id}
                       // The mark is the answer, so its state has to be readable
                       // without seeing which button is lit.
-                      aria-pressed={r?.outcome === o.id}
-                      className={`mark ${r?.outcome === o.id ? "on" : ""}`}
-                      onClick={() => onMark(i, r?.outcome === o.id ? null : o.id)}
+                      aria-pressed={outcome === o.id}
+                      className={`mark ${outcome === o.id ? "on" : ""}`}
+                      onClick={() => onMark(i, outcome === o.id ? null : o.id)}
                     >
                       {o.label}
                     </button>

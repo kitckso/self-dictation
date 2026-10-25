@@ -100,17 +100,27 @@ describe("Results", () => {
     expect(wrong!.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("leaves a typed Chunk unmarkable, because there is nothing to self-mark", () => {
-    render(
-      <Harness
-        initial={[
-          { transcript: "圖書館", outcome: null },
-          { transcript: "醫院", outcome: null },
-        ]}
-      />,
-    );
+  it("keeps a typed grade, but lets the person correct it", () => {
+    render(<Harness chunks={["圖書館"]} initial={[{ transcript: "圖書饭", outcome: null }]} />);
 
+    // The automatic figure is what is shown first, and the marks are not in
+    // the way of reading it.
+    expect(screen.getByText("67%")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /✓ all/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /mark it yourself/i }));
+
+    // Correcting it is a deliberate act, so it changes the figure.
+    const all = screen.getByRole("button", { name: /✓ all/ });
+    fireEvent.click(all);
+
+    expect(screen.getByText("100%")).toBeTruthy();
+    expect(screen.getByText(/marked by you/i)).toBeTruthy();
+
+    // And taking the mark back returns the automatic figure.
+    fireEvent.click(all);
+    expect(screen.getByText("67%")).toBeTruthy();
+    expect(screen.queryByText(/marked by you/i)).toBeNull();
   });
 
   it("says so when nothing in the Run was answered, because it is not kept", () => {

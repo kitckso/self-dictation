@@ -73,15 +73,17 @@ function keyOf(language: LanguageId, text: string): string {
  *
  * A Transcript is graded; a Paper Answer is marked by the person. Both end up
  * as the same kind of answer, which is what lets a Weakness be worked out
- * across Runs made in either mode.
+ * across Runs made in either mode. A mark is the person's own word about their
+ * answer, so it wins when both are present: on a typed Chunk a mark exists
+ * only because they corrected the automatic grade on Results.
  */
 export function classify(reference: string, transcript: string, outcome: Outcome | null): Answer {
-  if (transcript.trim()) {
-    return grade(reference, transcript).accuracy >= WRONG_BELOW ? "right" : "wrong";
-  }
   if (outcome === "correct") return "right";
   if (outcome === "wrong") return "wrong";
   if (outcome === "partial") return "partial";
+  if (transcript.trim()) {
+    return grade(reference, transcript).accuracy >= WRONG_BELOW ? "right" : "wrong";
+  }
   return "none";
 }
 

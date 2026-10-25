@@ -62,8 +62,11 @@ describe("classify", () => {
     expect(classify("abcd", "   ", null)).toBe("none");
   });
 
-  it("prefers a Transcript to a mark left over from paper", () => {
-    expect(classify("abcd", "abcd", "wrong")).toBe("right");
+  it("lets a mark made on Results correct a typed answer", () => {
+    // The typed figure is below the threshold, but the person has said their
+    // answer was right: the mark is the later and more specific judgement.
+    expect(classify("abcd", "abce", "correct")).toBe("right");
+    expect(classify("abcd", "abcd", "wrong")).toBe("wrong");
   });
 });
 
@@ -126,6 +129,18 @@ describe("itemProgress", () => {
     expect(hospital.partial).toBe(0);
     expect(hospital.wrong).toBe(1);
     expect(hospital.lastWrong).toBe(true);
+  });
+
+  it("clears a typed Weakness once the answer is marked right", () => {
+    const run = makeRun({
+      results: results({ index: 0, transcript: "圖書饭", outcome: "correct" }),
+    });
+
+    const library = itemProgress([run]).find((p) => p.text === "圖書館")!;
+
+    // The character comparison alone would have called this wrong.
+    expect(library.correct).toBe(1);
+    expect(library.lastWrong).toBe(false);
   });
 
   it("carries a piece of material across Runs", () => {

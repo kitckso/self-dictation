@@ -123,17 +123,23 @@ export function grade(reference: string, transcript: string): Grade {
 }
 
 /**
- * The score for one Chunk: an automatic figure when the person typed a
- * Transcript, a self-marked weight when they wrote on paper, or null when the
- * Chunk has not been attempted yet.
+ * The score for one Chunk: a self-marked weight when the person marked it, an
+ * automatic figure when they typed a Transcript, or null when the Chunk has
+ * not been attempted yet.
+ *
+ * A mark wins over a Transcript because of the way marks are made: they are
+ * entered on Results, after the Run, and a typed Chunk only offers them as a
+ * correction to the automatic figure. Leaving a typed answer graded by a
+ * character comparison with no way to disagree is what would make an unfair
+ * score — and the Weakness built from it — permanent.
  */
 export function scoreChunk(
   reference: string,
   transcript: string,
   outcome: Outcome | null,
 ): number | null {
-  if (transcript.trim()) return grade(reference, transcript).accuracy;
   if (outcome) return OUTCOME_WEIGHT[outcome];
+  if (transcript.trim()) return grade(reference, transcript).accuracy;
   return null;
 }
 
