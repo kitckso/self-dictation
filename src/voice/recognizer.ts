@@ -40,7 +40,18 @@ export async function recognizerForListening(): Promise<ListeningRecognizer> {
     custom = await recognizerFromHead(head);
     return custom;
   }
-  base ??= import("./trainer").then((module) => module.baseRecognizer());
+  if (!base) {
+    const pending = import("./trainer").then((module) => module.baseRecognizer());
+    base = pending;
+    // A load that failed is not a load that will always fail: the model may
+    // have been fetched while the device was briefly offline, or a first
+    // compile may have run out of memory. Keeping the rejected promise would
+    // make Run's "Try again" unable to do anything until the page reloaded,
+    // which is exactly the state it is offered for.
+    void pending.catch(() => {
+      if (base === pending) base = null;
+    });
+  }
   return base;
 }
 

@@ -69,3 +69,19 @@ describe("the recognizer to listen with", () => {
     expect(recognizer.wordLabels()).toEqual(["go", "no", "stop"]);
   });
 });
+
+describe("a base model that failed to load", () => {
+  it("is tried again rather than cached for the life of the page", async () => {
+    // A fresh copy of the module, because the cache under test is module
+    // state and an earlier test has already filled it.
+    vi.resetModules();
+    const trainer = await import("./trainer");
+    vi.mocked(trainer.baseRecognizer).mockRejectedValueOnce(new Error("offline"));
+    const { recognizerForListening: fresh } = await import("./recognizer");
+
+    // The Run offers "Try again" for this failure. It has to have somewhere
+    // to go, or the button can never work without a reload.
+    await expect(fresh()).rejects.toThrow("offline");
+    await expect(fresh()).resolves.toBeTruthy();
+  });
+});
