@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ListeningRecognizer } from "./recognizer";
 import type { SampleCollector } from "./trainer";
 import { VoiceTrainer } from "./VoiceTrainer";
 
@@ -127,6 +128,36 @@ describe("a recording that carries on by itself", () => {
 
     expect(recorded.length).toBeGreaterThan(0);
     expect(trainer.getState().counts.next).toBeGreaterThan(0);
+  });
+});
+
+/** A recognizer that hears nothing; training only needs one to hand over. */
+const idleRecognizer: ListeningRecognizer = {
+  wordLabels: () => [],
+  listen: async () => {},
+  stopListening: async () => {},
+  isListening: () => false,
+};
+
+describe("training", () => {
+  it("shows the progress step before it starts reading the samples", async () => {
+    const { collector } = fakeCollector();
+    collector.recognizer = vi.fn(() => idleRecognizer);
+    const trainer = trainerWith(collector);
+    await trainer.beginTraining();
+
+    const training = trainer.train();
+
+    // Reading the samples and building their tensors holds the main thread.
+    // The step has to be given a frame to reach the screen first, or the
+    // dialog freezes on the recording screen and looks like nothing happened.
+    expect(trainer.getState().stage).toBe("train");
+    expect(collector.train).not.toHaveBeenCalled();
+
+    await training;
+
+    expect(collector.train).toHaveBeenCalledTimes(1);
+    expect(trainer.getState().stage).toBe("test");
   });
 });
 

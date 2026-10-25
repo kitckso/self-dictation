@@ -456,6 +456,12 @@ export class VoiceTrainer {
       upcoming: null,
     });
     try {
+      // Training reads every sample and builds its tensors without yielding,
+      // so the progress step would not reach the screen until the first epoch
+      // had finished. Give the browser a frame to paint it first.
+      await afterPaint();
+      // The dialog may have been closed while that frame went by.
+      if (this.session !== session) return;
       await session.train((progress) => this.set({ progress }));
       const test = await session.test();
       // The head is kept so that it can be heard working before it is saved.
@@ -640,6 +646,23 @@ export class VoiceTrainer {
 /** Wait a little while. */
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Wait until what was just set has had a chance to reach the screen.
+ *
+ * Resolving on the next animation frame would still be before that frame is
+ * painted, so this waits for two: the first frame paints, and the second is
+ * the one the promise settles on. A browser without animation frames — a test
+ * — gets the next task instead, which is the same chance to paint.
+ */
+function afterPaint(): Promise<void> {
+  if (typeof requestAnimationFrame !== "function") {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 }
 
 /**
