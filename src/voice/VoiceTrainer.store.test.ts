@@ -26,7 +26,7 @@ const h = vi.hoisted(() => {
   /** The built-in English model's labels, as the library gives them. */
   const builtInLabels = ["go", "no", "stop", "_background_noise_", "_silence_", "_unknown_"];
   /** The labels a trained head has: its classes, not words. */
-  const trainedLabels = ["_background_noise_", "next", "repeat", "stop"];
+  const trainedLabels = ["_background_noise_", "next", "repeat"];
 
   /** A recognizer that hears one word and says so. */
   function recognizer(labels: string[], heard: number) {
@@ -47,10 +47,10 @@ const h = vi.hoisted(() => {
     trainedLabels,
     /** The built-in English model: it hears "go". */
     builtIn: recognizer(builtInLabels, 0),
-    /** A trained head: it hears the class "stop". */
-    trained: recognizer(trainedLabels, 3),
+    /** A trained head: it hears the class "repeat". */
+    trained: recognizer(trainedLabels, 2),
     /** A head rebuilt from the store, the way a reload builds one. */
-    reloaded: recognizer(trainedLabels, 3),
+    reloaded: recognizer(trainedLabels, 2),
     setRecognizer: vi.fn(),
   };
 });
@@ -67,8 +67,8 @@ import { getVoiceProfile, renameVoiceProfile, saveVoiceProfile } from "../storag
 function profile(over: Partial<VoiceProfile> = {}): VoiceProfile {
   return {
     id: "p1",
-    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
-    counts: { next: 6, repeat: 6, stop: 6 },
+    phrases: { next: "下一個", repeat: "再嚟一次" },
+    counts: { next: 6, repeat: 6 },
     noise: 4,
     enabled: true,
     createdAt: 1_000,
@@ -84,10 +84,10 @@ function head(): VoiceHead {
     id: "p1",
     formatVersion: 1,
     baseModelId: "18w-v1",
-    labels: ["_background_noise_", "next", "repeat", "stop"],
-    kernel: new Float32Array(8),
-    kernelShape: [2, 4],
-    bias: new Float32Array(4),
+    labels: ["_background_noise_", "next", "repeat"],
+    kernel: new Float32Array(6),
+    kernelShape: [2, 3],
+    bias: new Float32Array(3),
   };
 }
 
@@ -96,10 +96,10 @@ function trainedCollector(): SampleCollector {
   return {
     record: vi.fn(async () => {}),
     undo: vi.fn(),
-    counts: () => ({ next: 6, repeat: 6, stop: 6 }),
+    counts: () => ({ next: 6, repeat: 6 }),
     noiseCount: () => 4,
     train: vi.fn(async () => {}),
-    test: vi.fn(async () => ({ correct: 18, total: 18 })),
+    test: vi.fn(async () => ({ correct: 12, total: 12 })),
     head: vi.fn(async () => head()),
     recognizer: vi.fn(() => h.trained),
     dispose: vi.fn(),
@@ -153,13 +153,13 @@ describe("renaming the commands", () => {
     vi.mocked(getVoiceProfile).mockResolvedValue(profile());
     const trainer = trainerWith(trainedCollector());
     await trainer.load();
-    trainer.setPhrases({ next: "go", repeat: "again", stop: "halt" });
+    trainer.setPhrases({ next: "go", repeat: "again" });
 
     await trainer.rename();
 
     expect(renameVoiceProfile).toHaveBeenCalledWith(
       "p1",
-      { next: "go", repeat: "again", stop: "halt" },
+      { next: "go", repeat: "again" },
       expect.any(Number),
     );
     // The head is not written again: only the labels have changed.
@@ -172,7 +172,7 @@ describe("renaming the commands", () => {
     vi.mocked(getVoiceProfile).mockResolvedValue(profile());
     const trainer = trainerWith(trainedCollector());
     await trainer.load();
-    trainer.setPhrases({ next: "go", repeat: "go", stop: "halt" });
+    trainer.setPhrases({ next: "go", repeat: "go" });
 
     await trainer.rename();
 
@@ -214,7 +214,7 @@ describe("saving the commands", () => {
     await trainer.save();
 
     const saved = vi.mocked(saveVoiceProfile).mock.calls[0]?.[0];
-    expect(saved?.counts).toEqual({ next: 6, repeat: 6, stop: 6 });
+    expect(saved?.counts).toEqual({ next: 6, repeat: 6 });
     expect(saved?.noise).toBe(4);
   });
 
@@ -270,7 +270,7 @@ describe("the live test", () => {
 
     await trainer.liveTest();
 
-    expect(trainer.getState().heard).toBe("停");
+    expect(trainer.getState().heard).toBe("再嚟一次");
   });
 
   it("says the English word when the built-in model is listening", async () => {

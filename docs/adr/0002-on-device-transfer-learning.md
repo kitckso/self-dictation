@@ -1,16 +1,16 @@
 # Custom voice commands are trained on the device
 
-The three things a Run can be told to do — next, repeat, stop — can be said
-in the person's own words, in their own language and voice. The app ships with
-a small English speech-command model that knows "go", "yes", "no" and "stop";
-a person who dictates in Cantonese records a handful of samples of their own
-words instead, and a small classifier is trained on the device from those
-samples. Nothing about it is uploaded, because there is nowhere to upload it
-to.
+The two things a Run can be told to do — next and repeat — can be said in the
+person's own words, in their own language and voice. There is no command for
+ending a Run: saying the next word on the last Chunk ends it. The app ships with
+a small English speech-command model that knows "go", "yes" and "no"; a person
+who dictates in Cantonese records a handful of samples of their own words
+instead, and a small classifier is trained on the device from those samples.
+Nothing about it is uploaded, because there is nowhere to upload it to.
 
 The training is transfer learning with the TensorFlow.js speech-commands
 library: the bundled 18-word model's second-last dense layer (2,000 units)
-feeds a new `Dense(4)` softmax head, and only that head is trained. Training
+feeds a new `Dense(3)` softmax head, and only that head is trained. Training
 runs 20 epochs with a progress callback and is followed by a one-shot test of
 the result. The head is a few thousand weights, about 32 KB, so it is what is
 kept: its format version, the base model it was trained against, the classes
@@ -32,12 +32,14 @@ recommended — why room noise is recorded as a class of its own, and why
 improving the commands means training again from scratch rather than adding
 to what is already there.
 
-The typed names are labels only. The model's classes stay `next`, `repeat`,
-`stop` and `_background_noise_`, so a name is what the app shows and asks
-for, while the model only knows the sound that was recorded under it. Renaming
-a command is therefore free: only the label is written, the head behind it is
-untouched, and nothing is recorded again. Saying a different word means
-recording it again.
+The typed names are labels only. The model's classes stay `next`, `repeat` and
+`_background_noise_`, so a name is what the app shows and asks for, while the
+model only knows the sound that was recorded under it. Renaming a command is
+therefore free: only the label is written, the head behind it is untouched, and
+nothing is recorded again. Saying a different word means recording it again.
+Removing the stop command changed the class list, so a head trained before then
+no longer matches and is treated like any other head that does not belong: the
+app asks for it to be trained again rather than guessing at what it once knew.
 
 Cloud speech recognition was rejected: it needs a key, a server and a
 network, and it sends the audio away, which is the one thing this app is

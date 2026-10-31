@@ -76,22 +76,22 @@ _Avoid_: Rate, tempo, playback speed
 
 **Voice Command**:
 A word said aloud to steer a Run without touching the screen: "go" or "yes" to
-move to the next Chunk and play it, "no" to play the current Chunk again, and
-"stop" to silence auto-play. A second "stop" within a few seconds ends the Run,
-so one misheard word cannot end a dictation by itself. Heard on the device by a
-small English speech-command model, so the audio never leaves it. A Voice
-Command is only heard while the Voice is quiet — otherwise the app would hear
-its own dictation and steer itself. The words it hears are the built-in
-English ones unless the person has trained a Custom Voice Command.
+move to the next Chunk and play it, and "no" to play the current Chunk again.
+Saying the next word on the last Chunk ends the Run, so there is no command for
+ending it. Heard on the device by a small English speech-command model, so the
+audio never leaves it. A Voice Command is only heard while the Voice is quiet —
+otherwise the app would hear its own dictation and steer itself. The words it
+hears are the built-in English ones unless the person has trained a Custom
+Voice Command.
 _Avoid_: Voice control, speech recognition, wake word
 
 **Custom Voice Command**:
 A Voice Command in words the person chose and taught the device to hear, in
 their own language and voice. Its name is a label only: the model's classes
-stay `next`, `repeat` and `stop`, so the name is what the app shows and asks
-for, while the model only knows the sound that was recorded under it. Renaming
-one is therefore free: only the label is kept, and nothing is recorded again.
-Saying a different word means recording it again.
+stay `next` and `repeat`, so the name is what the app shows and asks for, while
+the model only knows the sound that was recorded under it. Renaming one is
+therefore free: only the label is kept, and nothing is recorded again. Saying a
+different word means recording it again.
 _Avoid_: Custom word, keyword, user command, trigger phrase
 
 **Voice Profile**:
@@ -103,7 +103,7 @@ _Avoid_: Voice set, command set, preferences, account
 
 **Voice Head**:
 The trained softmax layer that listens for a Voice Profile. It is a
-`Dense(4)` head on top of the bundled 18-word speech-commands model, a few
+`Dense(3)` head on top of the bundled 18-word speech-commands model, a few
 thousand weights weighing about 32 KB, and it is the only part of a trained
 model that is kept.
 _Avoid_: Model, classifier, checkpoint, weights file

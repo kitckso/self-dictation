@@ -527,13 +527,13 @@ describe("Run", () => {
         run={vocabRun()}
         onFinish={() => {}}
         commands={voiceCommands()}
-        commandPhrases={{ next: "下一個", repeat: "再嚟一次", stop: "停" }}
+        commandPhrases={{ next: "下一個", repeat: "再嚟一次" }}
       />,
     );
 
     expect(await screen.findByText(/say .下一個. to play the next chunk/i)).toBeTruthy();
     expect(screen.getByText(/再嚟一次. to hear this one again/i)).toBeTruthy();
-    expect(screen.getByText(/.停. to stop, then again to end/i)).toBeTruthy();
+    expect(screen.getByText(/on the last chunk, .下一個. ends the run/i)).toBeTruthy();
     // The built-in words are not what this person says.
     expect(screen.queryByText(/say .go. or .yes./i)).toBeNull();
   });
@@ -554,63 +554,55 @@ describe("Run", () => {
     expect(screen.queryByText(/say .go. or .yes./i)).toBeNull();
   });
 
-  it("asks for the person's own stop word again to end the Run", async () => {
+  it("ends the Run when the next word is heard on the last chunk", async () => {
     const commands = voiceCommands();
+    const onFinish = vi.fn();
     render(
       <Run
-        run={vocabRun()}
-        onFinish={() => {}}
+        run={vocabRun({ chunks: ["圖書館"] })}
+        onFinish={onFinish}
         commands={commands}
-        commandPhrases={{ next: "下一個", repeat: "再嚟一次", stop: "停" }}
       />,
     );
 
-    await commands.hear("stop");
+    await commands.hear("next");
 
-    expect(screen.getByText(/say .停. again after a second/i)).toBeTruthy();
+    // There is no next Chunk to move on to, so saying the next word finishes.
+    expect(onFinish).toHaveBeenCalledWith([""]);
+    expect(webSpeech.speak).not.toHaveBeenCalled();
   });
 
-  it("asks for a second stop before ending the Run with nothing playing", async () => {
+  it("does not end the Run when there is still a Chunk after this one", async () => {
+    vi.useFakeTimers();
     const commands = voiceCommands();
     const onFinish = vi.fn();
     render(<Run run={vocabRun()} onFinish={onFinish} commands={commands} />);
+    await releaseMicrophone();
 
-    await commands.hear("stop");
+    await commands.hear("next");
 
+    expect(screen.getByText("2/2")).toBeTruthy();
     expect(onFinish).not.toHaveBeenCalled();
-    expect(screen.getByText(/say .stop. again after a second/i)).toBeTruthy();
-
-    await commands.hear("stop");
-
-    expect(onFinish).toHaveBeenCalledWith(["", ""]);
   });
 
   it("keeps what was typed when the voice ends the Run", async () => {
     const commands = voiceCommands();
     const onFinish = vi.fn();
-    render(<Run run={vocabRun()} onFinish={onFinish} commands={commands} />);
+    render(
+      <Run
+        run={vocabRun({ chunks: ["圖書館"] })}
+        onFinish={onFinish}
+        commands={commands}
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /type it/i }));
     fireEvent.change(screen.getAllByPlaceholderText("type what you hear")[0]!, {
       target: { value: "圖書館" },
     });
-    await commands.hear("stop");
-    await commands.hear("stop");
+    await commands.hear("next");
 
-    expect(onFinish).toHaveBeenCalledWith(["圖書館", ""]);
-  });
-
-  it("lets a half-heard stop expire rather than ending later", async () => {
-    vi.useFakeTimers();
-    const commands = voiceCommands();
-    const onFinish = vi.fn();
-    render(<Run run={vocabRun()} onFinish={onFinish} commands={commands} />);
-
-    await commands.hear("stop");
-    await advance(7_000);
-    await commands.hear("stop");
-
-    expect(onFinish).not.toHaveBeenCalled();
+    expect(onFinish).toHaveBeenCalledWith(["圖書館"]);
   });
 
   it("can try the microphone again after it was refused", async () => {
@@ -661,11 +653,17 @@ describe("Run", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
-  it("silences auto-play on stop between plays, and only then ends the Run", async () => {
+  it("ends auto-play when the next word is heard on the last chunk", async () => {
     vi.useFakeTimers();
     const commands = voiceCommands();
     const onFinish = vi.fn();
-    render(<Run run={vocabRun()} onFinish={onFinish} commands={commands} />);
+    render(
+      <Run
+        run={vocabRun({ chunks: ["圖書館"] })}
+        onFinish={onFinish}
+        commands={commands}
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "auto" }));
     await releaseMicrophone();
@@ -677,14 +675,10 @@ describe("Run", () => {
 
     // Between two plays nothing is coming out of the speaker, so the
     // microphone is listening again even though auto-play is still on.
-    await commands.hear("stop");
+    await commands.hear("next");
 
     expect(webSpeech.cancel).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "auto" }).getAttribute("aria-pressed")).toBe("false");
-    expect(onFinish).not.toHaveBeenCalled();
-
-    await commands.hear("stop");
-
     expect(onFinish).toHaveBeenCalled();
   });
 });

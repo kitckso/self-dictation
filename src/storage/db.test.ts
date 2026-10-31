@@ -257,8 +257,8 @@ function makeRun(over: Partial<Run> = {}): Run {
 function makeProfile(over: Partial<VoiceProfile> = {}): VoiceProfile {
   return {
     id: "p1",
-    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
-    counts: { next: 6, repeat: 6, stop: 6 },
+    phrases: { next: "下一個", repeat: "再嚟一次" },
+    counts: { next: 6, repeat: 6 },
     enabled: true,
     createdAt: 1_000,
     updatedAt: 2_000,
@@ -272,10 +272,10 @@ function makeHead(over: Partial<VoiceHead> = {}): VoiceHead {
     id: "p1",
     formatVersion: 1,
     baseModelId: "18w-v1",
-    labels: ["_background_noise_", "next", "repeat", "stop"],
-    kernel: new Float32Array(8),
-    kernelShape: [2, 4],
-    bias: new Float32Array(4),
+    labels: ["_background_noise_", "next", "repeat"],
+    kernel: new Float32Array(6),
+    kernelShape: [2, 3],
+    bias: new Float32Array(3),
     ...over,
   };
 }
@@ -356,8 +356,8 @@ describe("voice commands", () => {
     await db.saveVoiceProfile(makeProfile(), makeHead());
 
     const head = await db.getVoiceHead("p1");
-    expect(head?.labels).toEqual(["_background_noise_", "next", "repeat", "stop"]);
-    expect(Array.from(head?.kernel ?? [])).toEqual(Array.from({ length: 8 }, () => 0));
+    expect(head?.labels).toEqual(["_background_noise_", "next", "repeat"]);
+    expect(Array.from(head?.kernel ?? [])).toEqual(Array.from({ length: 6 }, () => 0));
   });
 
   it("has no profile to begin with", async () => {
@@ -371,14 +371,12 @@ describe("voice commands", () => {
     await db.saveVoiceProfile(makeProfile(), makeHead());
 
     await db.saveVoiceProfile(
-      makeProfile({ phrases: { next: "go", repeat: "again", stop: "stop" } }),
-      makeHead({ kernel: new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]) }),
+      makeProfile({ phrases: { next: "go", repeat: "again" } }),
+      makeHead({ kernel: new Float32Array([1, 2, 3, 4, 5, 6]) }),
     );
 
     expect((await db.getVoiceProfile())?.phrases.next).toBe("go");
-    expect(Array.from((await db.getVoiceHead("p1"))?.kernel ?? [])).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8,
-    ]);
+    expect(Array.from((await db.getVoiceHead("p1"))?.kernel ?? [])).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it("forgets the head along with the profile", async () => {
@@ -409,17 +407,16 @@ describe("voice commands", () => {
     const db = await store();
     await db.saveVoiceProfile(makeProfile(), makeHead());
 
-    await db.renameVoiceProfile("p1", { next: "go", repeat: "again", stop: "halt" }, 3_000);
+    await db.renameVoiceProfile("p1", { next: "go", repeat: "again" }, 3_000);
 
     const profile = await db.getVoiceProfile();
-    expect(profile?.phrases).toEqual({ next: "go", repeat: "again", stop: "halt" });
+    expect(profile?.phrases).toEqual({ next: "go", repeat: "again" });
     expect(profile?.updatedAt).toBe(3_000);
     // The head is the same one: renaming is a change of labels.
     expect((await db.getVoiceHead("p1"))?.labels).toEqual([
       "_background_noise_",
       "next",
       "repeat",
-      "stop",
     ]);
   });
 
@@ -427,7 +424,7 @@ describe("voice commands", () => {
     const db = await store();
 
     await expect(
-      db.renameVoiceProfile("p1", { next: "go", repeat: "again", stop: "halt" }, 3_000),
+      db.renameVoiceProfile("p1", { next: "go", repeat: "again" }, 3_000),
     ).rejects.toThrow();
   });
 
@@ -437,7 +434,7 @@ describe("voice commands", () => {
     lastDb!.failWritesIn.add("voiceProfiles");
 
     await expect(
-      db.renameVoiceProfile("p1", { next: "go", repeat: "again", stop: "halt" }, 3_000),
+      db.renameVoiceProfile("p1", { next: "go", repeat: "again" }, 3_000),
     ).rejects.toThrow();
 
     // A rename that half-happened would be worse than one that did not.

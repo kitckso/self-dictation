@@ -1,11 +1,11 @@
 /**
- * The three things a Run can be told to do.
+ * The two things a Run can be told to do.
  *
  * These are also the classes the model is trained on, and they never change:
  * the words a person types are only labels (see ADR 0002), so a head trained
  * for "下一個" is the same head as one trained for "go".
  */
-export type VoiceCommandKey = "next" | "repeat" | "stop";
+export type VoiceCommandKey = "next" | "repeat";
 
 /**
  * The commands, in the order they are offered.
@@ -13,7 +13,7 @@ export type VoiceCommandKey = "next" | "repeat" | "stop";
  * The order is alphabetical, which is what puts the head's columns in the
  * order the transfer library expects.
  */
-export const COMMAND_KEYS: readonly VoiceCommandKey[] = ["next", "repeat", "stop"];
+export const COMMAND_KEYS: readonly VoiceCommandKey[] = ["next", "repeat"];
 
 /**
  * The class the room is recorded under.
@@ -39,7 +39,6 @@ export type RecordingTarget = VoiceCommandKey | typeof NOISE_LABEL;
 export interface VoicePhrases {
   next: string;
   repeat: string;
-  stop: string;
 }
 
 /** How many samples were recorded for each command. */
@@ -78,18 +77,18 @@ export const TRAIN_EPOCHS = 20;
 /**
  * The names to start from.
  *
- * The model's own words for the three things: "next", "repeat" and "stop".
- * They are English because they are the class names the head is trained on,
- * and they are only a starting point — the person is expected to type
- * whatever they actually say.
+ * The model's own words for the two things: "next" and "repeat". They are
+ * English because they are the class names the head is trained on, and they
+ * are only a starting point — the person is expected to type whatever they
+ * actually say.
  */
 export function defaultPhrases(): VoicePhrases {
-  return { next: "next", repeat: "repeat", stop: "stop" };
+  return { next: "next", repeat: "repeat" };
 }
 
 /** No samples of anything yet. */
 export function emptyCounts(): VoiceCounts {
-  return { next: 0, repeat: 0, stop: 0 };
+  return { next: 0, repeat: 0 };
 }
 
 /**
@@ -165,7 +164,7 @@ export function nextToRecord(
  * The names a Run should use, or null when the built-in English ones should.
  *
  * A missing profile and a switched-off profile are the same thing to a Run:
- * neither has anything to say beyond "go", "no" and "stop".
+ * neither has anything to say beyond "go" and "no".
  */
 export function commandPhrasesOf(profile: VoiceProfile | null): VoicePhrases | null {
   if (!profile || !profile.enabled) return null;

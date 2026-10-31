@@ -9,9 +9,9 @@ import { recognizerForListening, type ListeningRecognizer } from "./recognizer";
  *
  * The 18-word model is served from this app rather than from Google's CDN, so
  * the feature works offline and no audio — or anything else — leaves the
- * device. Only three of its words are commands; the rest are ignored.
+ * device. Only two of its words are commands; the rest are ignored.
  *
- * A person can replace those three words with their own, trained on this
+ * A person can replace those two words with their own, trained on this
  * device. The recognizer that is used is then the trained one rather than
  * this file's model — see `recognizer.ts`.
  */

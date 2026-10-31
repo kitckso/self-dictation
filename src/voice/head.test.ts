@@ -17,10 +17,10 @@ function head(over: Partial<VoiceHead> = {}): VoiceHead {
     id: "p1",
     formatVersion: HEAD_FORMAT_VERSION,
     baseModelId: BASE_MODEL_ID,
-    labels: ["_background_noise_", "next", "repeat", "stop"],
-    kernel: new Float32Array(8),
-    kernelShape: [2, 4],
-    bias: new Float32Array(4),
+    labels: ["_background_noise_", "next", "repeat"],
+    kernel: new Float32Array(6),
+    kernelShape: [2, 3],
+    bias: new Float32Array(3),
     ...over,
   };
 }
@@ -28,8 +28,8 @@ function head(over: Partial<VoiceHead> = {}): VoiceHead {
 /** A recognizer with one dense head, as the library builds it. */
 function trainedTransfer(over: Record<string, unknown> = {}) {
   const weights = [
-    { shape: [2, 4], data: async () => new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]) },
-    { shape: [4], data: async () => new Float32Array([9, 10, 11, 12]) },
+    { shape: [2, 3], data: async () => new Float32Array([1, 2, 3, 4, 5, 6]) },
+    { shape: [3], data: async () => new Float32Array([9, 10, 11]) },
   ];
   const layer = {
     name: "NewHeadDense",
@@ -37,7 +37,7 @@ function trainedTransfer(over: Record<string, unknown> = {}) {
     setWeights: () => {},
   };
   return {
-    wordLabels: () => ["_background_noise_", "next", "repeat", "stop"],
+    wordLabels: () => ["_background_noise_", "next", "repeat"],
     transferHead: { layers: [layer] },
     ...over,
   };
@@ -60,16 +60,16 @@ describe("a stored head", () => {
 
   it("is refused when its classes are not the ones the model was trained on", () => {
     expect(() =>
-      validateHead(head({ labels: ["next", "repeat", "stop", "_background_noise_"] })),
+      validateHead(head({ labels: ["next", "repeat", "_background_noise_"] })),
     ).toThrow(HeadMismatchError);
   });
 
   it("is refused when the kernel does not fill its shape", () => {
-    expect(() => validateHead(head({ kernel: new Float32Array(7) }))).toThrow(HeadMismatchError);
+    expect(() => validateHead(head({ kernel: new Float32Array(5) }))).toThrow(HeadMismatchError);
   });
 
   it("is refused when the bias does not match the number of classes", () => {
-    expect(() => validateHead(head({ bias: new Float32Array(3) }))).toThrow(HeadMismatchError);
+    expect(() => validateHead(head({ bias: new Float32Array(2) }))).toThrow(HeadMismatchError);
   });
 
   it("says the custom commands have to be retrained", () => {
@@ -84,10 +84,10 @@ describe("reading the head off a trained recognizer", () => {
     const read = await readHead(trainedTransfer(), "p1");
 
     expect(read.id).toBe("p1");
-    expect(read.labels).toEqual(["_background_noise_", "next", "repeat", "stop"]);
-    expect(Array.from(read.kernel)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(read.kernelShape).toEqual([2, 4]);
-    expect(Array.from(read.bias)).toEqual([9, 10, 11, 12]);
+    expect(read.labels).toEqual(["_background_noise_", "next", "repeat"]);
+    expect(Array.from(read.kernel)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(read.kernelShape).toEqual([2, 3]);
+    expect(Array.from(read.bias)).toEqual([9, 10, 11]);
   });
 
   it("remembers which base model the head belongs to", async () => {
@@ -101,8 +101,8 @@ describe("reading the head off a trained recognizer", () => {
     const layer = {
       name: "something else",
       getWeights: () => [
-        { shape: [2, 4], data: async () => new Float32Array(8) },
-        { shape: [4], data: async () => new Float32Array(4) },
+        { shape: [2, 3], data: async () => new Float32Array(6) },
+        { shape: [3], data: async () => new Float32Array(3) },
       ],
       setWeights: () => {},
     };
@@ -116,7 +116,7 @@ describe("reading the head off a trained recognizer", () => {
       "p1",
     );
 
-    expect(Array.from(read.kernel)).toEqual(Array.from({ length: 8 }, () => 0));
+    expect(Array.from(read.kernel)).toEqual(Array.from({ length: 6 }, () => 0));
   });
 });
 
@@ -124,10 +124,10 @@ describe("putting a stored head back onto the model", () => {
   it("sets the weights on the head the library builds", async () => {
     const tf = await import("@tensorflow/tfjs");
     const input = tf.input({ shape: [2] });
-    const layer = tf.layers.dense({ units: 4, name: "NewHeadDense" });
+    const layer = tf.layers.dense({ units: 3, name: "NewHeadDense" });
     const model = tf.model({ inputs: input, outputs: layer.apply(input) as SymbolicTensor });
     const transfer = {
-      wordLabels: () => ["_background_noise_", "next", "repeat", "stop"],
+      wordLabels: () => ["_background_noise_", "next", "repeat"],
       words: null as string[] | null,
       transferHead: null as { layers: HeadLayer[] } | null,
       model: null as unknown,
@@ -137,11 +137,11 @@ describe("putting a stored head back onto the model", () => {
     };
     const base = { model: { inputs: [], layers: [] } };
 
-    await applyHead(base, transfer, head({ kernel: new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]) }));
+    await applyHead(base, transfer, head({ kernel: new Float32Array([1, 2, 3, 4, 5, 6]) }));
 
     const weights = layer.getWeights();
-    expect(Array.from(weights[0].dataSync())).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(Array.from(weights[1].dataSync())).toEqual([0, 0, 0, 0]);
+    expect(Array.from(weights[0].dataSync())).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(Array.from(weights[1].dataSync())).toEqual([0, 0, 0]);
     weights.forEach((w) => w.dispose());
     expect(model).toBeTruthy();
   });

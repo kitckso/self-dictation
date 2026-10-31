@@ -26,8 +26,8 @@ function counts(over: Partial<VoiceCounts> = {}): VoiceCounts {
 function profile(over: Partial<VoiceProfile> = {}): VoiceProfile {
   return {
     id: "p1",
-    phrases: { next: "go", repeat: "again", stop: "stop" },
-    counts: counts({ next: 6, repeat: 6, stop: 6 }),
+    phrases: { next: "go", repeat: "again" },
+    counts: counts({ next: 6, repeat: 6 }),
     enabled: true,
     createdAt: 1_000,
     updatedAt: 2_000,
@@ -37,8 +37,8 @@ function profile(over: Partial<VoiceProfile> = {}): VoiceProfile {
 }
 
 describe("the default names", () => {
-  it("starts from the model's own words for the three commands", () => {
-    expect(defaultPhrases()).toEqual({ next: "next", repeat: "repeat", stop: "stop" });
+  it("starts from the model's own words for the two commands", () => {
+    expect(defaultPhrases()).toEqual({ next: "next", repeat: "repeat" });
   });
 
   it("never starts two commands off with the same name", () => {
@@ -49,20 +49,20 @@ describe("the default names", () => {
 });
 
 describe("the names a person types", () => {
-  it("accepts three different names", () => {
-    expect(phraseProblem({ next: "下一個", repeat: "再嚟一次", stop: "停" })).toBeNull();
+  it("accepts two different names", () => {
+    expect(phraseProblem({ next: "下一個", repeat: "再嚟一次" })).toBeNull();
   });
 
   it("refuses a name that is empty", () => {
-    expect(phraseProblem({ next: "  ", repeat: "again", stop: "stop" })).toMatch(/name/i);
+    expect(phraseProblem({ next: "  ", repeat: "again" })).toMatch(/name/i);
   });
 
   it("refuses two commands with the same name, because one word cannot mean two things", () => {
-    expect(phraseProblem({ next: "go", repeat: "go", stop: "stop" })).toMatch(/different/i);
+    expect(phraseProblem({ next: "go", repeat: "go" })).toMatch(/different/i);
   });
 
   it("refuses two names that differ only in case", () => {
-    expect(phraseProblem({ next: "Go", repeat: "go", stop: "stop" })).toMatch(/different/i);
+    expect(phraseProblem({ next: "Go", repeat: "go" })).toMatch(/different/i);
   });
 });
 
@@ -78,17 +78,15 @@ describe("how many samples are needed", () => {
   });
 
   it("says which command is still short of samples", () => {
-    const short = shortSamples(counts({ next: 4, repeat: 2, stop: 6 }));
+    const short = shortSamples(counts({ next: 4, repeat: 2 }));
 
     expect(short).toEqual([{ key: "repeat", missing: 2 }]);
   });
 
   it("will not train until every command and the room noise are there", () => {
-    expect(readyToTrain(counts({ next: 4, repeat: 4, stop: 4 }), MIN_NOISE_SAMPLES)).toBe(true);
-    expect(readyToTrain(counts({ next: 4, repeat: 4, stop: 3 }), MIN_NOISE_SAMPLES)).toBe(false);
-    expect(readyToTrain(counts({ next: 4, repeat: 4, stop: 4 }), MIN_NOISE_SAMPLES - 1)).toBe(
-      false,
-    );
+    expect(readyToTrain(counts({ next: 4, repeat: 4 }), MIN_NOISE_SAMPLES)).toBe(true);
+    expect(readyToTrain(counts({ next: 4, repeat: 3 }), MIN_NOISE_SAMPLES)).toBe(false);
+    expect(readyToTrain(counts({ next: 4, repeat: 4 }), MIN_NOISE_SAMPLES - 1)).toBe(false);
   });
 });
 
@@ -105,7 +103,6 @@ describe("what to record next", () => {
     const all = counts({
       next: RECOMMENDED_SAMPLES,
       repeat: RECOMMENDED_SAMPLES,
-      stop: RECOMMENDED_SAMPLES,
     });
 
     expect(nextToRecord(all, 0)).toBe(NOISE_LABEL);
@@ -115,7 +112,6 @@ describe("what to record next", () => {
     const all = counts({
       next: RECOMMENDED_SAMPLES,
       repeat: RECOMMENDED_SAMPLES,
-      stop: RECOMMENDED_SAMPLES,
     });
 
     expect(nextToRecord(all, RECOMMENDED_NOISE_SAMPLES)).toBeNull();
@@ -125,7 +121,6 @@ describe("what to record next", () => {
     const all = counts({
       next: RECOMMENDED_SAMPLES,
       repeat: RECOMMENDED_SAMPLES,
-      stop: RECOMMENDED_SAMPLES,
     });
 
     expect(nextToRecord(all, 1, NOISE_LABEL)).toBe(NOISE_LABEL);
@@ -136,7 +131,7 @@ describe("the model classes", () => {
   it("stay the same whatever the person calls the commands", () => {
     // The head is trained on these, and a stored head is checked against them,
     // so they cannot change with the display names.
-    expect(MODEL_CLASSES).toEqual(["_background_noise_", "next", "repeat", "stop"]);
+    expect(MODEL_CLASSES).toEqual(["_background_noise_", "next", "repeat"]);
   });
 
   it("are the commands, in the order the commands are named in", () => {
@@ -148,7 +143,7 @@ describe("how many samples there were", () => {
   it("counts the room's noise as well as the commands", () => {
     // The room was recorded, and it was part of what the head was trained
     // from; leaving it out would understate what was asked of the person.
-    expect(totalSamples(counts({ next: 6, repeat: 6, stop: 6 }), 4)).toBe(22);
+    expect(totalSamples(counts({ next: 6, repeat: 6 }), 4)).toBe(16);
   });
 
   it("is nothing when nothing was recorded", () => {
@@ -161,7 +156,6 @@ describe("the names a Run should use", () => {
     expect(commandPhrasesOf(profile())).toEqual({
       next: "go",
       repeat: "again",
-      stop: "stop",
     });
   });
 

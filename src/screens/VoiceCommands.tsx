@@ -28,9 +28,8 @@ import type { VoiceTrainer } from "../voice/VoiceTrainer";
  * again" rather than "repeat the whole passage".
  */
 const COMMAND_INFO: Record<VoiceCommandKey, { name: string; does: string }> = {
-  next: { name: "Next", does: "plays the next chunk" },
+  next: { name: "Next", does: "plays the next chunk, and ends the run on the last one" },
   repeat: { name: "Repeat", does: "says this chunk again" },
-  stop: { name: "Stop", does: "stops, and again to end the run" },
 };
 
 export interface VoiceCommandsProps {
@@ -305,7 +304,7 @@ export function VoiceCommands({ trainer, onClose, onChanged }: VoiceCommandsProp
 
         <p className="voice-sub">
           {profile
-            ? "Your own words for next, repeat and stop."
+            ? "Your own words for next and repeat."
             : "Everything happens on this device. The samples are used to train your commands and are thrown away afterwards — they are never kept, and nothing is sent anywhere."}
         </p>
 
@@ -329,7 +328,7 @@ export function VoiceCommands({ trainer, onClose, onChanged }: VoiceCommandsProp
           {state.stage === "names" && !profile && (
             <div className="voice-step">
               <p>
-                The app can learn your own words for the three things a dictation can be told to do.
+                The app can learn your own words for the two things a dictation can be told to do.
                 You say each of them a few times, it learns to tell them apart, and from then on it
                 listens for your words instead of the built-in English ones.
               </p>
@@ -358,10 +357,10 @@ export function VoiceCommands({ trainer, onClose, onChanged }: VoiceCommandsProp
               {/* The closing question says the reason too, so it is said once
                   and where the person is looking. */}
               {state.phraseError && !closing && <p className="note bad">{state.phraseError}</p>}
-              <p className="note">The built-in words are “go”, “no” and “stop”.</p>
+              <p className="note">The built-in words are “go” or “yes”, and “no”.</p>
               {profile && (
                 <p className="note">
-                  The names are only labels: the app still listens for the same three things, and it
+                  The names are only labels: the app still listens for the same two things, and it
                   keeps working whichever names you give them. Saying something different means
                   recording it again.
                 </p>
@@ -543,7 +542,7 @@ export function VoiceCommands({ trainer, onClose, onChanged }: VoiceCommandsProp
             <div className="voice-step">
               <p className={state.enabled ? "note good" : "note"}>
                 {state.enabled
-                  ? `Your commands are in use. A dictation will now listen for “${state.phrases.next}”, “${state.phrases.repeat}” and “${state.phrases.stop}”.`
+                  ? `Your commands are in use. A dictation will now listen for “${state.phrases.next}” and “${state.phrases.repeat}”. Saying “${state.phrases.next}” on the last chunk ends the run.`
                   : "Your commands are saved, but they are switched off — a dictation listens for the built-in words until you turn them on."}
               </p>
               {!state.enabled && (

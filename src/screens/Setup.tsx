@@ -184,7 +184,7 @@ export function Setup({
     ? totalSamples(voiceProfile.counts, voiceProfile.noise ?? 0)
     : 0;
   const voiceTitle = voiceProfile
-    ? `“${voiceProfile.phrases.next}”, “${voiceProfile.phrases.repeat}” and “${voiceProfile.phrases.stop}”`
+    ? `“${voiceProfile.phrases.next}” and “${voiceProfile.phrases.repeat}”`
     : "The built-in English words";
   const voiceChip = !voiceProfile
     ? "English"
@@ -193,10 +193,10 @@ export function Setup({
       : "Switched off";
   const voiceChipClass = !voiceProfile ? "chip" : voiceProfile.enabled ? "chip on" : "chip off";
   const voiceDetail = !voiceProfile
-    ? "A Run hears “go”, “yes”, “no” and “stop” out loud. Teach it your own words in any language — it learns them on this device, and the audio is never kept."
+    ? "A Run hears “go”, “yes” and “no” out loud. Teach it your own words in any language — it learns them on this device, and the audio is never kept."
     : voiceProfile.enabled
-      ? `Trained on ${trainedSamples} samples. A Run hears these instead of “go”, “yes”, “no” and “stop”.`
-      : `Trained on ${trainedSamples} samples, but switched off — a Run still hears “go”, “yes”, “no” and “stop”.`;
+      ? `Trained on ${trainedSamples} samples. A Run hears these instead of “go”, “yes” and “no”.`
+      : `Trained on ${trainedSamples} samples, but switched off — a Run still hears “go”, “yes” and “no”.`;
 
   async function save() {
     if (!canStart) return;

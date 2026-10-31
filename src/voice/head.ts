@@ -6,7 +6,7 @@ import { MODEL_CLASSES } from "./profile";
  * Saving only the part of the model that was trained.
  *
  * A custom head is the softmax layer the transfer library puts on top of the
- * bundled 18-word model: four outputs over a 2,000-wide embedding, so a few
+ * bundled 18-word model: three outputs over a 2,000-wide embedding, so a few
  * thousand weights rather than the millions in the base model. That head is
  * what gets kept; the base model is downloaded again from this app when it is
  * needed. See ADR 0002.

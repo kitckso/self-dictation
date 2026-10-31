@@ -31,8 +31,8 @@ const { voiceTrainer } = vi.hoisted(() => {
   // send the store into a loop.
   const state = {
     profile: null,
-    phrases: { next: "next", repeat: "repeat", stop: "stop" },
-    counts: { next: 0, repeat: 0, stop: 0 },
+    phrases: { next: "next", repeat: "repeat" },
+    counts: { next: 0, repeat: 0 },
     noise: 0,
     enabled: false,
     stage: "names",
@@ -65,8 +65,8 @@ afterEach(cleanup);
 function voiceProfile(over: Partial<VoiceProfile> = {}): VoiceProfile {
   return {
     id: "p1",
-    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
-    counts: { next: 6, repeat: 6, stop: 6 },
+    phrases: { next: "下一個", repeat: "再嚟一次" },
+    counts: { next: 6, repeat: 6 },
     enabled: true,
     createdAt: 1_000,
     updatedAt: 2_000,
@@ -223,7 +223,7 @@ describe("the voice commands card", () => {
     renderSetup();
 
     expect(screen.getByText(/the built-in english words/i)).toBeTruthy();
-    expect(screen.getByText(/hears .go., .yes., .no. and .stop. out loud/i)).toBeTruthy();
+    expect(screen.getByText(/hears .go., .yes. and .no. out loud/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /teach it your own words/i })).toBeTruthy();
   });
 
@@ -231,7 +231,7 @@ describe("the voice commands card", () => {
     renderSetup({ voiceProfile: voiceProfile() });
 
     expect(screen.getByText(/下一個/)).toBeTruthy();
-    expect(screen.getByText(/trained on 18 samples/i)).toBeTruthy();
+    expect(screen.getByText(/trained on 12 samples/i)).toBeTruthy();
     expect(screen.getByText("Your words")).toBeTruthy();
     expect(screen.getByRole("button", { name: /change the words/i })).toBeTruthy();
   });
@@ -240,7 +240,7 @@ describe("the voice commands card", () => {
     renderSetup({ voiceProfile: voiceProfile({ enabled: false }) });
 
     expect(screen.getByText("Switched off")).toBeTruthy();
-    expect(screen.getByText(/still hears .go., .yes., .no. and .stop./i)).toBeTruthy();
+    expect(screen.getByText(/still hears .go., .yes. and .no./i)).toBeTruthy();
   });
 
   it("opens the dialog when the card is tapped", async () => {

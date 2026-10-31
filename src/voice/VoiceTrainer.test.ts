@@ -16,7 +16,7 @@ function fakeCollector() {
       recorded.push(label);
     }),
     undo: vi.fn(),
-    counts: () => ({ next: 0, repeat: 0, stop: 0 }),
+    counts: () => ({ next: 0, repeat: 0 }),
     noiseCount: () => 0,
     train: vi.fn(async () => {}),
     test: vi.fn(async () => ({ correct: 0, total: 0 })),
@@ -83,11 +83,10 @@ describe("a recording that carries on by itself", () => {
     await waitFor(() => trainer.getState().busy === false);
 
     // Six of each command, then four of the room.
-    expect(recorded).toHaveLength(6 * 3 + 4);
+    expect(recorded).toHaveLength(6 * 2 + 4);
     expect(recorded.slice(0, 6)).toEqual(Array<string>(6).fill("next"));
     expect(recorded.slice(6, 12)).toEqual(Array<string>(6).fill("repeat"));
-    expect(recorded.slice(12, 18)).toEqual(Array<string>(6).fill("stop"));
-    expect(recorded.slice(18)).toEqual(Array<string>(4).fill("_background_noise_"));
+    expect(recorded.slice(12)).toEqual(Array<string>(4).fill("_background_noise_"));
   });
 
   it("stops when it is told to", async () => {

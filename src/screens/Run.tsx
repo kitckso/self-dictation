@@ -33,8 +33,9 @@ interface Props {
   /** What was typed, one entry per Chunk. Empty strings where nothing was. */
   onFinish: (transcripts: string[]) => void;
   /**
-   * Hears go/yes/stop. Absent when there is nothing to listen with, which is
-   * also what keeps the microphone out of tests that are about speech alone.
+   * Hears the next and repeat words. Absent when there is nothing to listen
+   * with, which is also what keeps the microphone out of tests that are about
+   * speech alone.
    */
   commands?: CommandListener;
   /**
@@ -70,15 +71,6 @@ function speakTag(lang: LanguageId): string {
 function defaultAnswerOn(lang: LanguageId): AnswerOn {
   return lang === "en" ? "typed" : "paper";
 }
-
-/**
- * How long a second "stop" can take to confirm ending the Run.
- *
- * The recognizer ignores everything for about a second after hearing the
- * first "stop", so the prompt asks for a pause; this leaves about five
- * seconds in which the confirmation is actually heard.
- */
-const END_CONFIRM_MS = 6_000;
 
 /**
  * A beat after the Voice stops before the microphone is reopened.
@@ -136,8 +128,6 @@ export function Run({
    * opened at all.
    */
   const [speechTurn, setSpeechTurn] = useState(0);
-  /** A first "stop" is waiting for a second one to confirm ending the Run. */
-  const [endArmed, setEndArmed] = useState(false);
   const [auto, setAuto] = useState(false);
   /** Bumped to restart auto-play from the cursor, even if it was already on. */
   const [autoRun, setAutoRun] = useState(0);
@@ -163,15 +153,14 @@ export function Run({
    *
    * A person who has trained their own commands hears their own words here;
    * everyone else hears the built-in English ones. The built-in model accepts
-   * "go" or "yes" for the next chunk, so both are offered.
+   * "go" or "yes" for the next chunk and "no" for a repeat.
    */
   const words = commandPhrases
     ? {
         next: `“${commandPhrases.next}”`,
         repeat: `“${commandPhrases.repeat}”`,
-        stop: `“${commandPhrases.stop}”`,
       }
-    : { next: "“go” or “yes”", repeat: "“no”", stop: "“stop”" };
+    : { next: "“go” or “yes”", repeat: "“no”" };
 
   /**
    * Whoever bumps this owns the speaker. A tap, a stop, or the effect being
@@ -181,9 +170,6 @@ export function Run({
   const playGen = useRef(0);
   /** Where auto-play should start; read without making the effect depend on the cursor. */
   const cursorRef = useRef(cursor);
-  /** The live answer for the voice handler, which outlives a render. */
-  const endArmedRef = useRef(false);
-  const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * What the voice-command handler reads.
    *
@@ -207,7 +193,6 @@ export function Run({
   useEffect(
     () => () => {
       webSpeech.cancel();
-      if (endTimer.current !== null) clearTimeout(endTimer.current);
     },
     [],
   );
@@ -240,7 +225,7 @@ export function Run({
   }, [playing]);
 
   /**
-   * Listen for "go"/"yes", "no", or "stop" whenever the device is quiet.
+   * Listen for the next and repeat words whenever the device is quiet.
    *
    * The microphone is let go while the voice speaks: on a phone's speaker the
    * app would otherwise hear its own dictation and steer itself.
@@ -258,21 +243,11 @@ export function Run({
         .start((command) => {
           if (!active) return;
           if (command === "next") {
-            disarmEnd();
-            nextAndPlay();
-          } else if (command === "repeat") {
-            disarmEnd();
-            repeatCurrent();
-          } else if (playingRef.current) {
-            // First "stop" silences playback; a second one confirms the end.
-            stopPlayback();
-            armEnd();
-          } else if (endArmedRef.current) {
-            disarmEnd();
-            finish();
+            // Saying "next" where there is no next Chunk is how a Run ends.
+            if (cursorRef.current >= run.chunks.length - 1) finish();
+            else nextAndPlay();
           } else {
-            // Nothing was playing: treat this as the first half of an end.
-            armEnd();
+            repeatCurrent();
           }
         })
         .then(() => {
@@ -400,49 +375,19 @@ export function Run({
     endSpeech();
   }
 
-  /**
-   * Open the confirmation window for ending the Run.
-   *
-   * A misheard word should not be able to end a dictation by itself, so the
-   * first "stop" in silence only arms the end; a second one within the window
-   * finishes it.
-   */
-  function armEnd() {
-    endArmedRef.current = true;
-    setEndArmed(true);
-    if (endTimer.current !== null) clearTimeout(endTimer.current);
-    endTimer.current = setTimeout(() => {
-      endTimer.current = null;
-      endArmedRef.current = false;
-      setEndArmed(false);
-    }, END_CONFIRM_MS);
-  }
-
-  function disarmEnd() {
-    endArmedRef.current = false;
-    setEndArmed(false);
-    if (endTimer.current !== null) {
-      clearTimeout(endTimer.current);
-      endTimer.current = null;
-    }
-  }
-
   function toggleAuto() {
-    disarmEnd();
     if (auto) stopPlayback();
     else setAuto(true);
   }
 
   /** Moving the cursor deliberately ends auto-play rather than fighting it. */
   function focusSlot(i: number) {
-    disarmEnd();
     if (auto) stopPlayback();
     setCursor(i);
   }
 
   /** Say one Chunk once, without touching auto-play. */
   async function playOnce(i: number) {
-    disarmEnd();
     const gen = ++playGen.current;
     beginSpeech(i);
     // Silence the microphone before the voice speaks; the listener must not
@@ -468,7 +413,6 @@ export function Run({
   async function speak(i: number) {
     // While something is already playing, the button reads "stop" — so stop.
     if (playing) {
-      disarmEnd();
       stopPlayback();
       return;
     }
@@ -476,23 +420,25 @@ export function Run({
   }
 
   function next() {
-    disarmEnd();
     stopPlayback();
     setCursor((c) => Math.min(c + 1, run.chunks.length - 1));
   }
   /**
-   * The voice's "go": move on and say the next Chunk once.
+   * The voice's next word: move on and say the next Chunk once.
    *
    * This deliberately does not reuse `next()`, which is the rail's quiet
    * "move the cursor" action, and it does not switch auto-play on. If
    * auto-play is already running, it stays on and restarts from the next
    * Chunk; otherwise the next Chunk is played once and the Run waits again.
+   *
+   * On the last Chunk there is nowhere to move on to, so the handler finishes
+   * the Run instead of calling this.
    */
   function nextAndPlay() {
     const nextIndex = Math.min(cursorRef.current + 1, run.chunks.length - 1);
     if (nextIndex === cursorRef.current) return;
     // The microphone only listens in silence, so "playing" here means the
-    // person had auto-play on before saying "go".
+    // person had auto-play on before saying their next word.
     const continueAuto = playingRef.current;
     stopPlayback();
     // Set the ref too: the new play reads it as soon as it starts.
@@ -506,14 +452,14 @@ export function Run({
     }
   }
   /**
-   * The voice's "no": say the current Chunk again.
+   * The voice's repeat word: say the current Chunk again.
    *
-   * One-shot like "go". With auto-play off, play it once and wait. If
+   * One-shot like the next word. With auto-play off, play it once and wait. If
    * auto-play is already on, replay from this Chunk and keep going.
    */
   function repeatCurrent() {
     // The microphone only listens in silence, so "playing" here means the
-    // person had auto-play on before saying "no".
+    // person had auto-play on before saying their repeat word.
     const continueAuto = playingRef.current;
     stopPlayback();
     if (continueAuto) {
@@ -524,14 +470,12 @@ export function Run({
     }
   }
   function back() {
-    disarmEnd();
     stopPlayback();
     setCursor((c) => Math.max(c - 1, 0));
   }
 
   /** End the Run and reveal the whole Passage, whether or not all of it was answered. */
   function finish() {
-    disarmEnd();
     stopPlayback();
     const answers = transcriptsRef.current;
     onFinish(run.chunks.map((_, i) => answers[i] ?? ""));
@@ -572,12 +516,6 @@ export function Run({
                   </button>
                 )}
               </>
-            ) : endArmed ? (
-              // The recognizer may have been built from words this component
-              // was never told about, so only name "stop" when both agree.
-              commandWords === "known"
-                ? `Say ${words.stop} again after a second to end the Run.`
-                : "Say your stop word again after a second to end the Run."
             ) : speaking !== null ? (
               "Voice commands are paused while the Voice speaks."
             ) : commandStarting ? (
@@ -590,7 +528,7 @@ export function Run({
               // could be a lie about what is actually being listened for.
               "Voice commands are on, but the words could not be read from this browser."
             ) : (
-              `Voice commands: say ${words.next} to play the next chunk, ${words.repeat} to hear this one again; ${words.stop} to stop, then again to end.`
+              `Voice commands: say ${words.next} to play the next chunk, ${words.repeat} to hear this one again. On the last chunk, ${words.next} ends the Run.`
             )}
           </p>
         )}

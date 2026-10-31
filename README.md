@@ -28,7 +28,7 @@ cannot see by re-reading your own work.
 **Speech comes from your device.** See [ADR-0001](docs/adr/0001-device-tts.md)
 for why, and read the platform notes below — this is the main caveat.
 
-**Your own commands are learned on the device.** You can teach the app three
+**Your own commands are learned on the device.** You can teach the app two
 words of your own instead of the built-in English ones. They are trained
 here, in your own voice, and nothing is uploaded. See
 [ADR-0002](docs/adr/0002-on-device-transfer-learning.md) for how, and for
@@ -69,14 +69,12 @@ Screen", or host `dist/` on any static host.
    began — and the change lands on the next play for Speed, on the next Chunk
    for repeats and pause. Auto-play stops when you touch a speech control, move
    the cursor, or reach the end. **Voice commands** listen on every Run: by
-   default say “go” or “yes” to move to the next Chunk and play it, “no” to
-   hear the current Chunk again, and “stop” to silence auto-play. A second
-   “stop” within a few seconds ends the Run, so a single misheard word cannot
-   end it by itself. The microphone is released while the Voice speaks, so the
-   app cannot hear its own dictation. Those words — “go”, “yes”, “no” and
-   “stop” — are English, and the recognition runs on the device. You can train
-   your own words instead — see
-   [Your own voice commands](#your-own-voice-commands) — and the hint then
+   default say “go” or “yes” to move to the next Chunk and play it, and “no” to
+   hear the current Chunk again. Saying the next word on the last Chunk ends the
+   Run. The microphone is released while the Voice speaks, so the app cannot
+   hear its own dictation. Those words — “go”, “yes” and “no” — are English, and
+   the recognition runs on the device. You can train your own words instead —
+   see [Your own voice commands](#your-own-voice-commands) — and the hint then
    names the words you chose rather than “go”.
 3. **Results** — every Reference appears at once, beside what you typed and a
    diff of the two, or the ✓ all / ~ some / ✗ wrong buttons for what you wrote
@@ -99,11 +97,11 @@ text — it trims each line, drops blank lines, and collapses runs of spaces.
 ## Your own voice commands
 
 The built-in words are English, and a Run listens for them until you teach it
-otherwise. You can train three commands of your own instead — next, repeat
-and stop — in whatever words you actually say.
+otherwise. You can train two commands of your own instead — next and repeat —
+in whatever words you actually say.
 
 **Voice commands**, on the Setup screen, opens a dialog that asks for a name for
-each of the three commands, for samples of them, and for the microphone. It
+each of the two commands, for samples of them, and for the microphone. It
 records 6 samples of each command and 4 of the room’s noise — 4 and 3 are the
 minimum it will train on — and each sample is one short recording you can take
 back and redo if it came out badly. The recording carries on by itself, so one
@@ -117,8 +115,8 @@ localhost.
 
 Once a profile exists it is used straight away; the dialog has a switch that
 turns it off, and turning it off puts the built-in English words back. The
-names you give the commands are labels only — the app still hears “next”,
-“repeat” and “stop” — so you can change what you call a command on its own,
+names you give the commands are labels only — the app still hears “next” and
+“repeat” — so you can change what you call a command on its own,
 with **Save the names**, and nothing is recorded again. A name you have typed
 but not saved is asked about before the dialog closes, so it cannot vanish
 without you being told; if keeping the names then fails, the question says so

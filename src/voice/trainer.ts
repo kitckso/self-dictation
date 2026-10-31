@@ -23,8 +23,8 @@ import type { ListeningRecognizer } from "./recognizer";
  *
  * The bundled 18-word model is the starting point: it knows English words and
  * nothing else. A small head is put on top of it and trained on a handful of
- * the person's own recordings, so that the app can score four classes of their
- * own speech — the three commands and the room around them. The recordings
+ * the person's own recordings, so that the app can score three classes of their
+ * own speech — the two commands and the room around them. The recordings
  * live in memory while the head is trained and are thrown away afterwards;
  * what is kept is the head, which is a few thousand weights rather than the
  * millions in the base model. See ADR 0002.
@@ -188,7 +188,7 @@ class SampleCollectorImpl implements SampleCollector {
    *
    * The library's documentation says a word may not be one the base model
    * knows, but its code does not check that: the transfer model replaces the
-   * base model's output layer with a head of its own, so "stop" is a class
+   * base model's output layer with a head of its own, so "repeat" is a class
    * name here and nothing more.
    */
   async record(label: string): Promise<void> {
@@ -215,7 +215,6 @@ class SampleCollectorImpl implements SampleCollector {
     return {
       next: counts.next ?? 0,
       repeat: counts.repeat ?? 0,
-      stop: counts.stop ?? 0,
     };
   }
 
@@ -251,7 +250,7 @@ class SampleCollectorImpl implements SampleCollector {
   /**
    * Measure the head against the samples it was trained on.
    *
-   * Every sample is heard once and the best of the four classes is compared
+   * Every sample is heard once and the best of the three classes is compared
    * with the class it was recorded under. The room samples are left out of
    * the count: the room is not a command, and a head that hears the room as
    * one of the commands is a head that would move a Run on by itself.

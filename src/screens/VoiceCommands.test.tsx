@@ -66,8 +66,8 @@ beforeEach(() => {
 function baseState(over: Partial<VoiceTrainerState> = {}): VoiceTrainerState {
   return {
     profile: null,
-    phrases: { next: "next", repeat: "repeat", stop: "stop" },
-    counts: { next: 0, repeat: 0, stop: 0 },
+    phrases: { next: "next", repeat: "repeat" },
+    counts: { next: 0, repeat: 0 },
     noise: 0,
     enabled: false,
     stage: "names",
@@ -89,8 +89,8 @@ function baseState(over: Partial<VoiceTrainerState> = {}): VoiceTrainerState {
 function savedProfile(over: Partial<VoiceProfile> = {}): VoiceProfile {
   return {
     id: "profile-1",
-    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
-    counts: { next: 4, repeat: 4, stop: 4 },
+    phrases: { next: "下一個", repeat: "再嚟一次" },
+    counts: { next: 4, repeat: 4 },
     enabled: true,
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_000,
@@ -108,7 +108,7 @@ function show(state: Partial<VoiceTrainerState> = {}) {
   // The trainer hands over the saved names with the profile, so the two are
   // put together here rather than in every test.
   const phrases = state.phrases ??
-    profile?.phrases ?? { next: "next", repeat: "repeat", stop: "stop" };
+    profile?.phrases ?? { next: "next", repeat: "repeat" };
   h.set(baseState({ ...state, phrases }));
   return render(
     <VoiceCommands
@@ -132,18 +132,14 @@ beforeEach(() => {
 });
 
 describe("VoiceCommands", () => {
-  it("asks for the three names, and says what each one does", () => {
+  it("asks for the two names, and says what each one does", () => {
     show();
 
     const next = screen.getByLabelText(/next.*plays the next chunk/i) as HTMLInputElement;
     const repeat = screen.getByLabelText(/repeat.*says this chunk again/i) as HTMLInputElement;
-    const stop = screen.getByLabelText(
-      /stop.*stops, and again to end the run/i,
-    ) as HTMLInputElement;
 
     expect(next.value).toBe("next");
     expect(repeat.value).toBe("repeat");
-    expect(stop.value).toBe("stop");
     expect(screen.getByText(/built-in words are/i)).toBeTruthy();
   });
 
@@ -165,7 +161,6 @@ describe("VoiceCommands", () => {
     expect(h.trainer.setPhrases).toHaveBeenCalledWith({
       next: "next",
       repeat: "again please",
-      stop: "stop",
     });
   });
 
@@ -192,11 +187,10 @@ describe("VoiceCommands", () => {
   });
 
   it("shows how many samples each command and the room have", () => {
-    show({ stage: "record", counts: { next: 2, repeat: 0, stop: 4 }, noise: 1 });
+    show({ stage: "record", counts: { next: 2, repeat: 0 }, noise: 1 });
 
     expect(screen.getByText("2 of 6 samples")).toBeTruthy();
     expect(screen.getByText("0 of 6 samples")).toBeTruthy();
-    expect(screen.getByText("4 of 6 samples")).toBeTruthy();
     expect(screen.getByText("1 of 4 samples")).toBeTruthy();
   });
 
@@ -240,7 +234,7 @@ describe("VoiceCommands", () => {
   });
 
   it("takes one sample back without a button that says so in words", () => {
-    show({ stage: "record", counts: { next: 2, repeat: 0, stop: 0 }, noise: 0 });
+    show({ stage: "record", counts: { next: 2, repeat: 0 }, noise: 0 });
 
     fireEvent.click(screen.getByRole("button", { name: /undo one next sample/i }));
 
@@ -248,7 +242,7 @@ describe("VoiceCommands", () => {
   });
 
   it("will not take back a sample that was never recorded", () => {
-    show({ stage: "record", counts: { next: 0, repeat: 0, stop: 0 }, noise: 0 });
+    show({ stage: "record", counts: { next: 0, repeat: 0 }, noise: 0 });
 
     const undo = screen.getByRole("button", {
       name: /undo one next sample/i,
@@ -258,16 +252,16 @@ describe("VoiceCommands", () => {
   });
 
   it("shows one number of samples, not two", () => {
-    show({ stage: "record", counts: { next: 0, repeat: 0, stop: 0 }, noise: 0 });
+    show({ stage: "record", counts: { next: 0, repeat: 0 }, noise: 0 });
 
-    expect(screen.getAllByText("0 of 6 samples")).toHaveLength(3);
+    expect(screen.getAllByText("0 of 6 samples")).toHaveLength(2);
     // The count on the row and the count of what is still needed were two
     // different numbers, which made the same thing look like two things.
     expect(screen.queryByText(/still needed before it can be trained/i)).toBeNull();
   });
 
   it("will not train until every command and the room have enough samples", () => {
-    show({ stage: "record", counts: { next: 4, repeat: 4, stop: 3 }, noise: 3 });
+    show({ stage: "record", counts: { next: 4, repeat: 3 }, noise: 3 });
 
     const train = screen.getByRole("button", { name: "Train" }) as HTMLButtonElement;
 
@@ -277,7 +271,7 @@ describe("VoiceCommands", () => {
   });
 
   it("trains once the minimums are met", () => {
-    show({ stage: "record", counts: { next: 4, repeat: 4, stop: 4 }, noise: 3 });
+    show({ stage: "record", counts: { next: 4, repeat: 4 }, noise: 3 });
 
     const train = screen.getByRole("button", { name: "Train" }) as HTMLButtonElement;
 
@@ -353,7 +347,7 @@ describe("VoiceCommands", () => {
   it("shows what is saved and what can be done with it", () => {
     show({ profile: savedProfile() });
 
-    expect(screen.getByText(/12 samples/i)).toBeTruthy();
+    expect(screen.getByText(/8 samples/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try them" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Record new ones" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete these commands" })).toBeTruthy();
@@ -398,7 +392,7 @@ describe("VoiceCommands", () => {
   });
 
   it("saves the names on their own, without recording anything again", () => {
-    show({ profile: savedProfile(), phrases: { next: "go", repeat: "再嚟一次", stop: "停" } });
+    show({ profile: savedProfile(), phrases: { next: "go", repeat: "再嚟一次" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Save the names" }));
 
@@ -415,7 +409,7 @@ describe("VoiceCommands", () => {
   it("will not save names that are wrong", () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "go", stop: "停" },
+      phrases: { next: "go", repeat: "go" },
       phraseError: "Each command needs a different name.",
     });
 
@@ -496,7 +490,7 @@ describe("VoiceCommands", () => {
   it("asks before it throws away names that were never saved", () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "再嚟一次", stop: "停" },
+      phrases: { next: "go", repeat: "再嚟一次" },
       stage: "record",
       unsaved: true,
     });
@@ -512,7 +506,7 @@ describe("VoiceCommands", () => {
   it("offers to keep the names before the dialog goes", async () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "再嚟一次", stop: "停" },
+      phrases: { next: "go", repeat: "再嚟一次" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -528,7 +522,7 @@ describe("VoiceCommands", () => {
   it("says why the names were not saved, where the question is", async () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "再嚟一次", stop: "停" },
+      phrases: { next: "go", repeat: "再嚟一次" },
     });
     // The trainer says what went wrong, as it does when a write fails.
     h.trainer.rename.mockImplementation(async () => {
@@ -556,7 +550,7 @@ describe("VoiceCommands", () => {
   it("will not save names that are wrong, from the closing question either", () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "go", stop: "停" },
+      phrases: { next: "go", repeat: "go" },
       phraseError: "Each command needs a different name.",
     });
 
@@ -572,7 +566,7 @@ describe("VoiceCommands", () => {
   it("does not save the names twice when the button is tapped twice", async () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "再嚟一次", stop: "停" },
+      phrases: { next: "go", repeat: "再嚟一次" },
     });
     let release: () => void = () => {};
     h.trainer.rename.mockImplementation(
@@ -606,7 +600,7 @@ describe("VoiceCommands", () => {
   it("says a later failure in the question too, and not only the first one", async () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "再嚟一次", stop: "停" },
+      phrases: { next: "go", repeat: "再嚟一次" },
     });
     // The rename fails, so the question says why.
     h.trainer.rename.mockImplementation(async () => {
@@ -647,7 +641,7 @@ describe("VoiceCommands", () => {
   it("makes the rest of the dialog not live while the question is up", () => {
     show({
       profile: savedProfile(),
-      phrases: { next: "go", repeat: "再嚟一次", stop: "停" },
+      phrases: { next: "go", repeat: "再嚟一次" },
     });
 
     // Before the question, everything is as it was.
@@ -665,7 +659,7 @@ describe("VoiceCommands", () => {
   });
 
   it("closes once the names have been kept", async () => {
-    const phrases = { next: "go", repeat: "再嚟一次", stop: "停" };
+    const phrases = { next: "go", repeat: "再嚟一次" };
     show({ profile: savedProfile(), phrases });
     h.trainer.rename.mockImplementation(async () => {
       h.set(baseState({ profile: savedProfile({ phrases }), phrases, stage: "names" }));

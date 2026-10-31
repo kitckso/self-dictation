@@ -222,7 +222,11 @@ export class VoiceTrainer {
       const profile = await getVoiceProfile();
       this.set({
         profile,
-        phrases: profile?.phrases ?? this.state.phrases,
+        // A profile saved before the stop command was removed still carries
+        // that label; only the commands that exist now are kept.
+        phrases: profile
+          ? { next: profile.phrases.next, repeat: profile.phrases.repeat }
+          : this.state.phrases,
         // The counts on the profile are what it was trained on; this time
         // has recorded nothing yet.
         counts: emptyCounts(),

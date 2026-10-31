@@ -106,8 +106,8 @@ beforeAll(() => {
 function voiceProfile(over: Partial<VoiceProfile> = {}): VoiceProfile {
   return {
     id: "p1",
-    phrases: { next: "下一個", repeat: "再嚟一次", stop: "停" },
-    counts: { next: 6, repeat: 6, stop: 6 },
+    phrases: { next: "下一個", repeat: "再嚟一次" },
+    counts: { next: 6, repeat: 6 },
     enabled: true,
     createdAt: 1_000,
     updatedAt: 2_000,
