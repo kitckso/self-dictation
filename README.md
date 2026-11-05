@@ -1,5 +1,7 @@
 # Self Dictation
 
+![Self Dictation — Listen. Write. Learn.](docs/assets/self-dictation-hero.jpg)
+
 Hear it, write it on paper. A dictation practice app for English, Cantonese and
 Mandarin that runs entirely on your own device — no account, no server, no API
 key, no network calls.
