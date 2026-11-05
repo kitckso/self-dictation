@@ -137,6 +137,21 @@ describe("Setup", () => {
     expect(await screen.findByDisplayValue(/self-dictation\.netlify\.app\/#d=/)).toBeTruthy();
   });
 
+  it("formats a Chinese paragraph into one chunk per line", () => {
+    const { container } = renderSetup();
+    fireEvent.change(screen.getByPlaceholderText(/paste a passage/i), {
+      target: {
+        value: "今天天气不错 tian qi bu cuo 。I plan to walk.\n不过好像要下雨了。",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "format" }));
+
+    expect(container.querySelector("textarea")?.value).toBe(
+      "今天天气不错。\n不过好像要下雨了。",
+    );
+  });
+
   it("has nothing to share until there is something to dictate", () => {
     renderSetup();
 

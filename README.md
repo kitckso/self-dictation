@@ -90,9 +90,13 @@ Screen", or host `dist/` on any static host.
    random five, or copy them to the clipboard — one item per line.
 
 **Paragraph** mode splits on sentence boundaries (`。！？` / `.?!`), falling back
-to clause punctuation (`，、；`) for long sentences, capped at 70 characters.
+to clause punctuation (`，、；`) for long sentences, capped at 70 characters. A
+line break is a chunk boundary too, so a passage can be split by hand.
 **Vocabulary** mode takes one item per line. The **format** button tidies pasted
-text — it trims each line, drops blank lines, and collapses runs of spaces.
+text — it trims each line, drops blank lines, and collapses runs of spaces. For
+Cantonese and Mandarin it also removes pinyin, English, and anything else that
+is not a Chinese character or punctuation; in Paragraph mode it then puts each
+chunk on its own line.
 
 ## Your own voice commands
 

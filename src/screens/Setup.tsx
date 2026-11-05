@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { draftTitle, findCollectionByTitle, planCollectionSave } from "../domain/collections";
-import { formatVocabText, toChunks } from "../domain/chunking";
+import { formatText, toChunks } from "../domain/chunking";
 import {
   LANGUAGES,
   languageById,
@@ -336,16 +336,22 @@ export function Setup({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          {mode === "vocab" && (
-            <button
-              className="rowbtn"
-              disabled={!text.trim()}
-              onClick={() => setText(formatVocabText(text))}
-              title="Trim spaces, drop blank lines"
-            >
-              format
-            </button>
-          )}
+          <button
+            className="rowbtn"
+            disabled={!text.trim()}
+            onClick={() => setText(formatText(text, language, mode))}
+            title={
+              mode === "paragraph"
+                ? language === "en"
+                  ? "Trim spaces, split sentences, one chunk per line"
+                  : "Keep only Chinese characters and punctuation, one chunk per line"
+                : language === "en"
+                  ? "Trim spaces and drop blank lines"
+                  : "Keep only Chinese characters and punctuation"
+            }
+          >
+            format
+          </button>
           <button className="rowbtn" onClick={() => setText(SAMPLES[mode][language])}>
             load sample
           </button>

@@ -1,4 +1,4 @@
-import type { Mode } from "./types";
+import type { LanguageId, Mode } from "./types";
 import { toSentences } from "./sentences";
 
 /**
@@ -36,16 +36,59 @@ function byLength(parts: string[]): string[] {
 }
 
 /**
- * Tidy pasted Vocabulary text: trim each line, drop blank lines, and collapse
- * runs of spaces or tabs inside a line. Line breaks are kept — they are what
- * separates one Vocabulary Item from the next.
+ * What Chinese text keeps: Han characters, the punctuation Chinese is written
+ * with (including the ASCII sentence marks some people type), and whitespace.
+ * Everything else — Latin letters, pinyin tone marks, digits, and stray
+ * symbols — is dropped.
  */
-export function formatVocabText(text: string): string {
-  return text
+const KEEP_IN_CHINESE =
+  /[^\p{Script=Han}\s.,!?;:\u00B7\u2010-\u2015\u2018\u2019\u201C\u201D\u2026\u3000-\u303F\uFE10-\uFE1F\uFE30-\uFE4F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]/gu;
+
+/** A line with no Han character left is a gloss or a romanisation, not content. */
+const HAN = /\p{Script=Han}/u;
+
+/** Brackets left empty once the pinyin or gloss they held has been dropped. */
+const EMPTY_BRACKETS = /[（【〔〈《「『]\s*[）】〕〉》」』]/g;
+
+/** Chinese is written without spaces around its punctuation. */
+const SPACE_AROUND_CHINESE_PUNCTUATION = [
+  /\s+([，。！？、；：）】〕〉》」』”’…—·])/g,
+  /([（【〔〈《「『“‘])\s+/g,
+  /([，。！？、；：）】〕〉》」』”’…—·])\s+/g,
+];
+
+function tidyLine(line: string, language: LanguageId): string {
+  if (language === "en") return line.replace(/[ \t\u3000]+/g, " ").trim();
+
+  let kept = line.replace(KEEP_IN_CHINESE, "").replace(EMPTY_BRACKETS, "");
+  // Keep an ASCII mark only where a Han character is right next to it; one
+  // stranded by removed English or pinyin is a leftover, not punctuation.
+  kept = kept.replace(/[.,!?;:]+/g, (marks: string, offset: number, whole: string) => {
+    const before = whole[offset - 1] ?? "";
+    const after = whole[offset + marks.length] ?? "";
+    return HAN.test(before) || HAN.test(after) ? marks : "";
+  });
+  for (const pattern of SPACE_AROUND_CHINESE_PUNCTUATION) kept = kept.replace(pattern, "$1");
+  return kept.replace(/[ \t\u3000]+/g, " ").trim();
+}
+
+/**
+ * Tidy pasted text for the format button: trim each line, drop blank lines,
+ * collapse runs of spaces or tabs, and — for Chinese — remove pinyin, English,
+ * and anything else that is not a Han character or punctuation.
+ *
+ * In Paragraph mode the result is split into Chunks, one per line, so that
+ * every line is one Chunk. A line break the person typed is a Chunk boundary
+ * of their own making, and is kept as one.
+ */
+export function formatText(text: string, language: LanguageId, mode: Mode): string {
+  const tidied = text
     .split(/\r\n|\r|\n/)
-    .map((line) => line.replace(/[ \t\u3000]+/g, " ").trim())
-    .filter(Boolean)
+    .map((line) => tidyLine(line, language))
+    .filter((line) => line && (language === "en" || HAN.test(line)))
     .join("\n");
+
+  return mode === "paragraph" ? toChunks(tidied, "paragraph").join("\n") : tidied;
 }
 
 /**
@@ -59,6 +102,9 @@ export function formatVocabText(text: string): string {
  * Which of those applies is decided by what the text looks like, not by the
  * Language it was filed under: a Cantonese Passage written in Latin letters is
  * split on Latin sentence enders, because there are no CJK ones to find.
+ *
+ * A line break is always a Chunk boundary, in both modes. That lets someone
+ * split a Passage by hand where sentence punctuation would not.
  */
 export function toChunks(text: string, mode: Mode): string[] {
   if (mode === "vocab") {
@@ -69,15 +115,16 @@ export function toChunks(text: string, mode: Mode): string[] {
       .flatMap(wrapItem);
   }
 
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-
-  if (CJK.test(trimmed)) {
-    return byLength(splitAfter(trimmed, SENTENCE_END)).filter(Boolean);
-  }
-
-  // Latin script: split on sentence enders.
-  return byLength(toSentences(trimmed)).filter(Boolean);
+  return text
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) =>
+      CJK.test(line)
+        ? byLength(splitAfter(line, SENTENCE_END))
+        : byLength(toSentences(line)),
+    )
+    .filter(Boolean);
 }
 
 /**
