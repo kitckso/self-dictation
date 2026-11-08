@@ -39,6 +39,10 @@ interface Props {
   onVoiceCommandsChanged: () => void;
   /** The saved voice commands, if there are any. */
   voiceProfile: VoiceProfile | null;
+  /** Whether a Run should listen for voice commands at all. */
+  voiceControl: boolean;
+  /** The switch on the card, so it is not buried inside the training dialog. */
+  onVoiceControlChange: (enabled: boolean) => void;
 }
 
 const SAMPLES: Record<Mode, Record<LanguageId, string>> = {
@@ -80,6 +84,8 @@ export function Setup({
   onStorageFail,
   onVoiceCommandsChanged,
   voiceProfile,
+  voiceControl,
+  onVoiceControlChange,
 }: Props) {
   const [language, setLanguage] = useState<LanguageId>(initial?.language ?? "yue");
   const [mode, setMode] = useState<Mode>(initial?.mode ?? "paragraph");
@@ -192,11 +198,13 @@ export function Setup({
       ? "Your words"
       : "Switched off";
   const voiceChipClass = !voiceProfile ? "chip" : voiceProfile.enabled ? "chip on" : "chip off";
-  const voiceDetail = !voiceProfile
-    ? "A Run hears “go”, “yes” and “no” out loud. Teach it your own words in any language — it learns them on this device, and the audio is never kept."
-    : voiceProfile.enabled
-      ? `Trained on ${trainedSamples} samples. A Run hears these instead of “go”, “yes” and “no”.`
-      : `Trained on ${trainedSamples} samples, but switched off — a Run still hears “go”, “yes” and “no”.`;
+  const voiceDetail = !voiceControl
+    ? "A Run will not listen for voice commands. The buttons still work."
+    : !voiceProfile
+      ? "A Run hears “go”, “yes” and “no” out loud. Teach it your own words in any language — it learns them on this device, and the audio is never kept."
+      : voiceProfile.enabled
+        ? `Trained on ${trainedSamples} samples. A Run hears these instead of “go”, “yes” and “no”.`
+        : `Trained on ${trainedSamples} samples, but switched off — a Run still hears “go”, “yes” and “no”.`;
 
   async function save() {
     if (!canStart) return;
@@ -407,6 +415,14 @@ export function Setup({
             <span className={voiceChipClass}>{voiceChip}</span>
           </div>
           <p className="note">{voiceDetail}</p>
+          <label className="voice-check">
+            <input
+              type="checkbox"
+              checked={voiceControl}
+              onChange={(event) => onVoiceControlChange(event.currentTarget.checked)}
+            />
+            <span>Listen for voice commands during a Run</span>
+          </label>
           {voiceError && <p className="note bad">{voiceError}</p>}
           <div className="voice-card-actions">
             <button className="rowbtn" onClick={() => void openVoice()}>

@@ -6,6 +6,7 @@ import { encodeSetup, shareUrl, type SharedSetup } from "./domain/share";
 import type { Run } from "./domain/types";
 import { listCollections, listAllRuns, saveRun, deleteRun, getVoiceProfile } from "./storage/db";
 import { onVoicesChanged, webSpeech } from "./tts";
+import { voiceCommands } from "./voice";
 import type { VoiceProfile } from "./voice/profile";
 
 vi.mock("./tts", () => ({
@@ -79,6 +80,9 @@ async function arriveFrom(setup: SharedSetup) {
 afterEach(() => {
   cleanup();
   window.location.hash = "";
+  // The voice-control switch is remembered, so one test's choice must not
+  // decide the next test's default.
+  window.localStorage.clear();
   vi.clearAllMocks();
   store.runs.length = 0;
   // clearAllMocks empties the calls but leaves whatever implementation a test
@@ -444,5 +448,18 @@ describe("voice commands", () => {
     await startRun();
 
     expect(await screen.findByText(/say .go. or .yes. to play the next chunk/i)).toBeTruthy();
+  });
+
+  it("does not listen at all when voice control is switched off on Setup", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /listen for voice commands/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Vocabulary" }));
+    fireEvent.change(screen.getByPlaceholderText(/圖書館/), { target: { value: "圖書館" } });
+    fireEvent.click(screen.getByRole("button", { name: /start dictation/i }));
+
+    expect(await screen.findByText("1/1")).toBeTruthy();
+    expect(screen.queryByText(/voice commands/i)).toBeNull();
+    expect(voiceCommands.start).not.toHaveBeenCalled();
   });
 });

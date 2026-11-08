@@ -88,6 +88,8 @@ function renderSetup(props: Partial<Parameters<typeof Setup>[0]> = {}) {
       onStorageFail={() => {}}
       onVoiceCommandsChanged={() => {}}
       voiceProfile={null}
+      voiceControl
+      onVoiceControlChange={() => {}}
       {...props}
     />,
   );
@@ -256,6 +258,28 @@ describe("the voice commands card", () => {
 
     expect(screen.getByText("Switched off")).toBeTruthy();
     expect(screen.getByText(/still hears .go., .yes. and .no./i)).toBeTruthy();
+  });
+
+  it("lets voice control be switched off from the card", () => {
+    const onVoiceControlChange = vi.fn();
+    renderSetup({ onVoiceControlChange });
+
+    const toggle = screen.getByRole("checkbox", { name: /listen for voice commands/i });
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(toggle);
+
+    expect(onVoiceControlChange).toHaveBeenCalledWith(false);
+  });
+
+  it("says a Run will not listen when voice control is off", () => {
+    renderSetup({ voiceControl: false });
+
+    expect(screen.getByRole("checkbox", { name: /listen for voice commands/i })).toHaveProperty(
+      "checked",
+      false,
+    );
+    expect(screen.getByText(/will not listen for voice commands/i)).toBeTruthy();
   });
 
   it("opens the dialog when the card is tapped", async () => {

@@ -70,7 +70,8 @@ Screen", or host `dist/` on any static host.
    Changing a setting never interrupts the play under way — it finishes as it
    began — and the change lands on the next play for Speed, on the next Chunk
    for repeats and pause. Auto-play stops when you touch a speech control, move
-   the cursor, or reach the end. **Voice commands** listen on every Run: by
+   the cursor, or reach the end. **Voice commands** listen on every Run unless
+   they are switched off on Setup: by
    default say “go” or “yes” to move to the next Chunk and play it, and “no” to
    hear the current Chunk again. Saying the next word on the last Chunk ends the
    Run. The microphone is released while the Voice speaks, so the app cannot
@@ -104,7 +105,8 @@ chunk on its own line.
 
 The built-in words are English, and a Run listens for them until you teach it
 otherwise. You can train two commands of your own instead — next and repeat —
-in whatever words you actually say.
+in whatever words you actually say. The Voice commands card on Setup also has a
+switch that turns listening off altogether; the buttons then do the same work.
 
 **Voice commands**, on the Setup screen, opens a dialog that asks for a name for
 each of the two commands, for samples of them, and for the microphone. It

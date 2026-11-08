@@ -21,6 +21,33 @@ type Screen =
   | { name: "results"; run: RunState; record: RunRecord };
 
 /**
+ * Whether a Run should listen for voice commands.
+ *
+ * This is a tiny preference rather than material, so it lives in
+ * localStorage: it has to be known before the store opens, and losing it
+ * costs nothing more than turning the microphone back on.
+ */
+const VOICE_CONTROL_KEY = "self-dictation.voice-control";
+
+function readVoiceControl(): boolean {
+  try {
+    return window.localStorage.getItem(VOICE_CONTROL_KEY) !== "off";
+  } catch {
+    // Private browsing can refuse storage. Listening is the default, so it is
+    // also the safe answer when the preference cannot be read.
+    return true;
+  }
+}
+
+function storeVoiceControl(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(VOICE_CONTROL_KEY, enabled ? "on" : "off");
+  } catch {
+    // The switch still works for this visit; only remembering it failed.
+  }
+}
+
+/**
  * What the URL brought with it.
  *
  * `waiting` only ever applies to a visitor who arrived with a payload, so an
@@ -36,6 +63,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: "setup" });
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [canEnumerate, setCanEnumerate] = useState<boolean | null>(null);
+  /** Whether the next Run should listen for voice commands at all. */
+  const [voiceControl, setVoiceControl] = useState(readVoiceControl);
   const [arrival, setArrival] = useState<Arrival>(() =>
     payloadFromHash(window.location.hash) ? { kind: "waiting" } : { kind: "none" },
   );
@@ -164,6 +193,11 @@ export default function App() {
     return () => window.removeEventListener("hashchange", readHash);
   }, []);
 
+  function changeVoiceControl(enabled: boolean) {
+    setVoiceControl(enabled);
+    storeVoiceControl(enabled);
+  }
+
   /**
    * Go to Setup with some material already chosen.
    *
@@ -270,6 +304,8 @@ export default function App() {
             onStorageFail={storageFail}
             onVoiceCommandsChanged={readVoiceProfile}
             voiceProfile={voiceProfile}
+            voiceControl={voiceControl}
+            onVoiceControlChange={changeVoiceControl}
           />
         ))}
       {screen.name === "history" && (
@@ -283,7 +319,7 @@ export default function App() {
         <Run
           run={screen.run}
           onFinish={(transcripts) => finish(screen.run, transcripts)}
-          commands={canTryVoiceCommands() ? voiceCommands : undefined}
+          commands={voiceControl && canTryVoiceCommands() ? voiceCommands : undefined}
           commandPhrases={commandPhrases ?? undefined}
           commandWords={voiceWords}
           autoStart
