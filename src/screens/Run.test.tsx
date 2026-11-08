@@ -216,7 +216,7 @@ describe("Run", () => {
 
     // Without a label these announce as "upwards arrow" / "downwards arrow".
     expect(screen.getByRole("button", { name: "Previous chunk" }).textContent).toBe("↑");
-    expect(screen.getByRole("button", { name: "Next chunk" }).textContent).toBe("↓");
+    expect(screen.getByRole("button", { name: "Next chunk" }).textContent).toBe("↓ next");
   });
 
   it("cannot walk past either end of the Passage", () => {
@@ -230,6 +230,42 @@ describe("Run", () => {
 
     fireEvent.click(next);
     expect((next as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("moves to the next Chunk and plays it once when the next button is tapped", async () => {
+    vi.useFakeTimers();
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next chunk" }));
+
+    expect(screen.getByText("2/2")).toBeTruthy();
+    expect(webSpeech.speak).toHaveBeenCalledTimes(1);
+    expect(webSpeech.speak).toHaveBeenCalledWith("醫院", expect.anything());
+    expect(screen.getByRole("button", { name: "auto" }).getAttribute("aria-pressed")).toBe("false");
+
+    await act(async () => {
+      finishPlay?.();
+      finishPlay = null;
+      await Promise.resolve();
+    });
+    await advance(10_000);
+
+    // One play after moving, then it waits again.
+    expect(webSpeech.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not turn a play already under way into auto-play when next is tapped", async () => {
+    vi.useFakeTimers();
+    render(<Run run={vocabRun()} onFinish={() => {}} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "▶ speak" })[0]!);
+    expect(webSpeech.speak).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next chunk" }));
+
+    expect(screen.getByText("2/2")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "auto" }).getAttribute("aria-pressed")).toBe("false");
+    expect(webSpeech.speak).toHaveBeenLastCalledWith("醫院", expect.anything());
   });
 
   it("tells the answer fields apart, since every one of them looks the same", () => {

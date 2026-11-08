@@ -419,32 +419,26 @@ export function Run({
     await playOnce(i);
   }
 
-  function next() {
-    stopPlayback();
-    setCursor((c) => Math.min(c + 1, run.chunks.length - 1));
-  }
   /**
-   * The voice's next word: move on and say the next Chunk once.
+   * Move on and say the next Chunk once. Shared by the rail's next button and
+   * the voice's next word.
    *
-   * This deliberately does not reuse `next()`, which is the rail's quiet
-   * "move the cursor" action, and it does not switch auto-play on. If
-   * auto-play is already running, it stays on and restarts from the next
-   * Chunk; otherwise the next Chunk is played once and the Run waits again.
+   * By default it keeps auto-play on if it was already running, which is what
+   * the voice wants: a command arrives only in the silence between plays. The
+   * rail button passes `false`, because it can be tapped mid-play and a
+   * one-shot play must not turn into auto-play.
    *
-   * On the last Chunk there is nowhere to move on to, so the handler finishes
-   * the Run instead of calling this.
+   * On the last Chunk there is nowhere to move on to, so the voice handler
+   * finishes the Run instead of calling this.
    */
-  function nextAndPlay() {
+  function nextAndPlay(keepAuto = playingRef.current) {
     const nextIndex = Math.min(cursorRef.current + 1, run.chunks.length - 1);
     if (nextIndex === cursorRef.current) return;
-    // The microphone only listens in silence, so "playing" here means the
-    // person had auto-play on before saying their next word.
-    const continueAuto = playingRef.current;
     stopPlayback();
     // Set the ref too: the new play reads it as soon as it starts.
     cursorRef.current = nextIndex;
     setCursor(nextIndex);
-    if (continueAuto) {
+    if (keepAuto) {
       setAuto(true);
       setAutoRun((n) => n + 1);
     } else {
@@ -679,13 +673,13 @@ export function Run({
             ↑
           </button>
           <button
-            className="rail-btn"
+            className="rail-btn rail-next"
             aria-label="Next chunk"
             title="Next chunk"
-            onClick={next}
+            onClick={() => nextAndPlay(false)}
             disabled={cursor === run.chunks.length - 1}
           >
-            ↓
+            ↓ next
           </button>
           <button
             className={`rail-btn${auto ? " on" : ""}`}
